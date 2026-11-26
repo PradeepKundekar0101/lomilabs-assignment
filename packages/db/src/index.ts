@@ -24,3 +24,6 @@ export class JobStore {
     job.status = status;
   }
 }
+
+export * from "./generated/prisma/client.js";
+export { createDb } from "./client.js";
