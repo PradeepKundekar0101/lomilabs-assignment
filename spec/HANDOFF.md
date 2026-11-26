@@ -30,10 +30,10 @@ Delete them once spec 003 replaces the worker logic.
 ## Git state
 
 - Branch `db-schema`, pushed, open as PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/1 (base `main`).
-- Commit `04c60c1` on that branch holds spec 001 plus the earlier Docker/api/web scaffold.
-- **Spec 002 is implemented and verified but NOT committed.** Uncommitted files:
-  `.env.example`, `apps/api/package.json`, `apps/api/src/{app.ts,app.test.ts,main.ts,upload.ts,upload.test.ts}`, `docker-compose.yml`, `packages/db/prisma/schema.prisma`, `packages/db/prisma/migrations/20261126120000_pdf_object_storage/`, `pnpm-lock.yaml`.
-  Ask the user before committing; then commit on `db-schema` and push so it lands in PR #1.
+- Commit `04c60c1` holds spec 001 plus the earlier Docker/api/web scaffold.
+- Commit `afda8d6` holds spec 002, this `spec/` folder and `CLAUDE.md`.
+- The working tree was clean at handoff. PR #1 is not merged yet.
+- New work: ask the user whether to keep adding to PR #1 or branch off `db-schema` for a new PR.
 - The repo has no CI. Verification is local only.
 
 ## Status
@@ -41,7 +41,7 @@ Delete them once spec 003 replaces the worker logic.
 | Spec | State |
 |------|-------|
 | 001 Database schema | Done, committed, in PR #1. |
-| 002 PDF object storage and upload | Done and verified end to end, uncommitted. |
+| 002 PDF object storage and upload | Done, committed, in PR #1. |
 | 003 Extraction worker | Draft. Next to build. |
 | 004 Review API | Draft. |
 | 005 New versions and carry-over | Draft. |

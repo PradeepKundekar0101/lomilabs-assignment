@@ -16,7 +16,7 @@ Every feature starts as a numbered spec in this folder, and code follows the spe
 | # | Spec | Status |
 |---|------|--------|
 | 001 | [Database schema](001-database-schema.md) | Done |
-| 002 | [PDF object storage and upload](002-pdf-object-storage.md) | Done (uncommitted) |
+| 002 | [PDF object storage and upload](002-pdf-object-storage.md) | Done |
 | 003 | [Extraction worker](003-extraction-worker.md) | Draft |
 | 004 | [Review API](004-review-api.md) | Draft |
 | 005 | [New versions and carry-over](005-new-versions-and-carry-over.md) | Draft |

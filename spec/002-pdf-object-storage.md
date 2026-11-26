@@ -1,6 +1,6 @@
 # 002 PDF object storage and upload
 
-Status: Done, verified end to end, NOT yet committed (see `HANDOFF.md`)
+Status: Done (commit `afda8d6`, PR #1)
 Depends on: 001
 
 ## Goal
