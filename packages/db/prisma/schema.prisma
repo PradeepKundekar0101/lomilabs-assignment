@@ -69,7 +69,11 @@ model DocumentVersion {
   documentId String        @map("document_id") @db.Uuid
   document   Document      @relation("DocumentVersions", fields: [documentId], references: [id])
   versionNo  Int           @map("version_no")
-  pdf        Bytes
+  // PDF bytes live in object storage at storage_key (pdfs/<sha256>.pdf), never in Postgres.
+  storageKey String        @map("storage_key")
+  sha256     String
+  sizeBytes  Int           @map("size_bytes")
+  mimeType   String        @map("mime_type")
   parsedText String?       @map("parsed_text")
   status     VersionStatus @default(queued)
   attempts   Int           @default(0)
