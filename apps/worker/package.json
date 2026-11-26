@@ -1,0 +1,19 @@
+{
+  "name": "@lomi/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "oxlint src"
+  },
+  "dependencies": {
+    "@lomi/core": "workspace:*",
+    "@lomi/db": "workspace:*",
+    "@lomi/shared": "workspace:*"
+  },
+  "types": "dist/index.d.ts"
+}
