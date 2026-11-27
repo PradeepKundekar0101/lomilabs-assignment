@@ -12,6 +12,9 @@
     "lint": "oxlint src"
   },
   "dependencies": {
-    "@lomi/shared": "workspace:*"
+    "@anthropic-ai/sdk": "^1.14.0",
+    "@lomi/shared": "workspace:*",
+    "unpdf": "^2.2.2",
+    "zod": "^4.6.7"
   }
 }
