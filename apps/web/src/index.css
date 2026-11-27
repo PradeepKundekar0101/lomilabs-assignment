@@ -41,6 +41,13 @@ h1 {
   color: var(--text-h);
 }
 
+h2 {
+  margin: 24px 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
 dl {
   margin: 0;
   border: 1px solid var(--border);

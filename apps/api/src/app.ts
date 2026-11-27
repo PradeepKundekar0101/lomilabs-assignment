@@ -1,16 +1,21 @@
 import { DocumentType, type PrismaClient } from "@lomi/db";
 import express, { type Express } from "express";
 import { StorageUnavailableError, type CreateVersionResult, type VersionTarget } from "./create-version.js";
+import type { RetryResult } from "./retry.js";
 
+/** Each check returns counts, so a successful count is also the service's health check. */
 export interface HealthChecks {
-  db: () => Promise<unknown>;
-  redis: () => Promise<unknown>;
+  /** Document versions per status. */
+  db: () => Promise<Record<string, number>>;
+  /** Extraction jobs waiting and active. */
+  redis: () => Promise<Record<string, number>>;
 }
 
 export interface AppDeps {
   checks: HealthChecks;
   db: Pick<PrismaClient, "document">;
   createVersion: (target: VersionTarget, file: File) => Promise<CreateVersionResult>;
+  retry: (documentId: string) => Promise<RetryResult>;
 }
 
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
@@ -19,7 +24,7 @@ const MAX_BODY_BYTES = MAX_PDF_BYTES + 64 * 1024;
 const TOO_LARGE = "file must be at most 10 MB";
 const documentTypes: readonly string[] = Object.values(DocumentType);
 
-export function createApp({ checks, db, createVersion }: AppDeps): Express {
+export function createApp({ checks, db, createVersion, retry }: AppDeps): Express {
   const app = express();
 
   app.get("/health", async (_req, res) => {
@@ -27,6 +32,8 @@ export function createApp({ checks, db, createVersion }: AppDeps): Express {
     const body = {
       db: dbCheck.status === "fulfilled" ? "ok" : "error",
       redis: redis.status === "fulfilled" ? "ok" : "error",
+      versions: dbCheck.status === "fulfilled" ? dbCheck.value : null,
+      queue: redis.status === "fulfilled" ? redis.value : null,
     };
     for (const [name, r] of Object.entries({ db: dbCheck, redis })) {
       if (r.status === "rejected") console.error(`health: ${name} check failed`, r.reason);
@@ -103,6 +110,13 @@ export function createApp({ checks, db, createVersion }: AppDeps): Express {
     if (!doc) return void res.status(404).json({ error: "document not found" });
     // Values arrive with extraction (spec 003) and the review API (spec 004).
     res.json({ ...doc, values: [] });
+  });
+
+  app.post("/documents/:id/retry", async (req, res) => {
+    const result = await retry(req.params.id);
+    if (result === "not_found") return void res.status(404).json({ error: "document not found" });
+    if (result === "not_failed") return void res.status(409).json({ error: "only a failed extraction can be retried" });
+    res.status(202).json({ id: req.params.id, versionId: result.versionId, status: "queued" });
   });
 
   app.use(

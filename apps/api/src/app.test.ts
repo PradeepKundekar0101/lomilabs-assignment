@@ -4,10 +4,12 @@ import { describe, expect, it } from "vitest";
 import { createApp, type AppDeps } from "./app.js";
 import { StorageUnavailableError } from "./create-version.js";
 
-const ok = async () => {};
 const fail = async () => {
   throw new Error("down");
 };
+const versions = { queued: 1, extracting: 0, extracted: 3, failed: 0, superseded: 0 };
+const queue = { waiting: 1, active: 0 };
+const counts = { db: async () => versions, redis: async () => queue };
 
 const DOC_ID = "8f0c2c1e-3a4b-4c5d-8e9f-0a1b2c3d4e5f";
 const storedDoc = {
@@ -19,7 +21,7 @@ const storedDoc = {
 };
 
 const baseDeps: AppDeps = {
-  checks: { db: ok, redis: ok },
+  checks: counts,
   db: {
     document: {
       findUnique: async ({ where }: { where: { id: string } }) => (where.id === DOC_ID ? storedDoc : null),
@@ -28,6 +30,7 @@ const baseDeps: AppDeps = {
     },
   } as unknown as AppDeps["db"],
   createVersion: async () => ({ documentId: DOC_ID, versionId: "ver-1", status: "queued" }),
+  retry: async () => ({ versionId: "ver-1" }),
 };
 
 async function request(path: string, init: RequestInit = {}, deps: Partial<AppDeps> = {}) {
@@ -42,12 +45,18 @@ async function request(path: string, init: RequestInit = {}, deps: Partial<AppDe
 }
 
 describe("GET /health", () => {
-  it("returns 200 when db and redis are up", async () => {
-    expect(await request("/health")).toEqual({ status: 200, body: { db: "ok", redis: "ok" } });
+  it("returns 200 with version and queue counts when db and redis are up", async () => {
+    expect(await request("/health")).toEqual({ status: 200, body: { db: "ok", redis: "ok", versions, queue } });
   });
-  it("returns 503 when either is down", async () => {
-    expect(await request("/health", {}, { checks: { db: fail, redis: ok } })).toEqual({ status: 503, body: { db: "error", redis: "ok" } });
-    expect(await request("/health", {}, { checks: { db: ok, redis: fail } })).toEqual({ status: 503, body: { db: "ok", redis: "error" } });
+  it("returns 503, with null counts for the service that is down", async () => {
+    expect(await request("/health", {}, { checks: { ...counts, db: fail } })).toEqual({
+      status: 503,
+      body: { db: "error", redis: "ok", versions: null, queue },
+    });
+    expect(await request("/health", {}, { checks: { ...counts, redis: fail } })).toEqual({
+      status: 503,
+      body: { db: "ok", redis: "error", versions, queue: null },
+    });
   });
 });
 
@@ -133,5 +142,21 @@ describe("GET /documents", () => {
       status: 200,
       body: [{ id: DOC_ID, title: "march.pdf", type: "invoice", versionNo: 1, status: "queued" }],
     });
+  });
+});
+
+describe("POST /documents/:id/retry", () => {
+  const retry = (result: Awaited<ReturnType<AppDeps["retry"]>>) => request(`/documents/${DOC_ID}/retry`, { method: "POST" }, { retry: async () => result });
+
+  it("returns 202 with the requeued version", async () => {
+    expect(await retry({ versionId: "ver-1" })).toEqual({ status: 202, body: { id: DOC_ID, versionId: "ver-1", status: "queued" } });
+  });
+  it("returns 409 unless the current version failed, and 404 for an unknown document", async () => {
+    expect((await retry("not_failed")).status).toBe(409);
+    expect((await retry("not_found")).status).toBe(404);
+  });
+  it("returns 500 when the database fails", async () => {
+    const r = await request(`/documents/${DOC_ID}/retry`, { method: "POST" }, { retry: fail as AppDeps["retry"] });
+    expect(r).toEqual({ status: 500, body: { error: "internal error" } });
   });
 });
