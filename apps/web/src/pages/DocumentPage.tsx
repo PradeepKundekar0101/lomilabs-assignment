@@ -9,7 +9,7 @@ import { UploadDialog } from '@/components/UploadDialog'
 import { ValueCard } from '@/components/ValueCard'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -31,13 +31,13 @@ function EvidenceText({ text, value }: { text: string; value: Value | undefined 
   }, [start, end])
 
   return (
-    <pre className="p-4 font-mono text-sm whitespace-pre-wrap">
+    <pre className="p-5 font-mono text-xs leading-relaxed whitespace-pre-wrap text-foreground">
       {start === null || end === null ? (
         text
       ) : (
         <>
           {text.slice(0, start)}
-          <mark ref={mark} className="rounded-sm bg-yellow-200 px-0.5 text-foreground">
+          <mark ref={mark} className="rounded-sm bg-brand/30 px-0.5 text-foreground ring-1 ring-brand">
             {text.slice(start, end)}
           </mark>
           {text.slice(end)}
@@ -53,7 +53,7 @@ function ProgressLine({ id }: { id: string }) {
   const done = data.total - data.pending
   return (
     <div className="flex items-center gap-3">
-      <Progress value={(done / data.total) * 100} className="max-w-48" aria-label="Review progress" />
+      <Progress value={(done / data.total) * 100} className="h-1.5 max-w-48" aria-label="Review progress" />
       <span className="text-sm whitespace-nowrap text-muted-foreground">
         {data.pending} pending · {done} done
       </span>
@@ -68,15 +68,15 @@ function Header({ doc, onVersion }: { doc: DocumentView; onVersion: (versionNo: 
   const isCurrent = version?.versionNo === current?.versionNo
 
   return (
-    <Card>
+    <Card className="gap-5 [--card-spacing:--spacing(7)]">
       {/* Stacked on phones, so the upload button does not squeeze the title into a narrow column. */}
       <CardHeader className="max-sm:has-data-[slot=card-action]:grid-cols-1">
-        <CardTitle className="text-xl">{doc.title}</CardTitle>
-        <CardDescription className="flex flex-wrap items-center gap-3">
+        <h1 className="text-headline-md text-primary sm:text-headline-lg">{doc.title}</h1>
+        <CardDescription className="mt-3 flex flex-wrap items-center gap-3">
           {TYPE_LABELS[doc.type]}
           {current && version && (
             <Select value={String(version.versionNo)} onValueChange={(v) => onVersion(Number(v) === current.versionNo ? undefined : Number(v))}>
-              <SelectTrigger size="sm" aria-label="Version">
+              <SelectTrigger size="sm" className="bg-card" aria-label="Version">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -91,12 +91,12 @@ function Header({ doc, onVersion }: { doc: DocumentView; onVersion: (versionNo: 
           )}
           <StatusBadge status={version?.status ?? null} error={version?.error} />
         </CardDescription>
-        <CardAction className="max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:mt-2 max-sm:justify-self-start">
+        <CardAction className="max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:mt-4 max-sm:justify-self-start">
           <UploadDialog documentId={doc.id} />
         </CardAction>
       </CardHeader>
-      <CardContent className="grid gap-3">
-        {version?.status === 'extracted' && <p className="font-medium">{reviewSummary(doc.values)}</p>}
+      <CardContent className="grid gap-4">
+        {version?.status === 'extracted' && <p className="text-base font-medium text-primary">{reviewSummary(doc.values)}</p>}
         {isInFlight(version?.status) && (
           <p className="text-muted-foreground">
             {version?.status === 'queued' ? 'Queued for extraction' : 'Extracting'}. The values appear here when it finishes.
@@ -135,15 +135,15 @@ function Header({ doc, onVersion }: { doc: DocumentView; onVersion: (versionNo: 
 
 function LoadingPage() {
   return (
-    <div className="grid gap-6" aria-busy="true" aria-label="Loading document">
-      <Skeleton className="h-32 w-full" />
-      <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid gap-7" aria-busy="true" aria-label="Loading document">
+      <Skeleton className="h-40 w-full bg-foreground/5" />
+      <div className="grid gap-7 lg:grid-cols-2">
         <div className="grid gap-4">
           {[1, 2, 3].map((n) => (
-            <Skeleton key={n} className="h-40 w-full" />
+            <Skeleton key={n} className="h-44 w-full bg-foreground/5" />
           ))}
         </div>
-        <Skeleton className="h-96 w-full" />
+        <Skeleton className="h-96 w-full bg-foreground/5" />
       </div>
     </div>
   )
@@ -164,7 +164,7 @@ export function DocumentPage() {
   )
   if (error) {
     return (
-      <div className="grid gap-6">
+      <div className="grid gap-7">
         {back}
         <Alert variant="destructive">
           <AlertTitle>{error instanceof ApiError && error.status === 404 ? 'Not found' : 'Could not load the document'}</AlertTitle>
@@ -179,11 +179,11 @@ export function DocumentPage() {
   const selected = doc.values.find((v) => v.id === selectedId) ?? doc.values[0]
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-7">
       {back}
       <Header doc={doc} onVersion={(n) => setParams(n === undefined ? {} : { v: String(n) })} />
       {doc.values.length > 0 && (
-        <div className="grid items-start gap-6 lg:grid-cols-2">
+        <div className="grid items-start gap-7 lg:grid-cols-2">
           <section aria-label="Values" className="grid gap-4">
             {doc.values.map((value) => (
               <ValueCard
@@ -197,8 +197,12 @@ export function DocumentPage() {
               />
             ))}
           </section>
-          <Card className="py-0 lg:sticky lg:top-6">
-            <ScrollArea className="h-[calc(100vh-6rem)]" role="region" aria-label="Document text">
+          <Card className="gap-0 py-0 lg:sticky lg:top-10">
+            <div className="flex items-center justify-between border-b px-5 py-3 text-xs font-medium text-muted-foreground">
+              Document text
+              <span className="font-mono">v{doc.version?.versionNo}</span>
+            </div>
+            <ScrollArea className="h-[calc(100vh-9rem)]" role="region" aria-label="Document text">
               <EvidenceText text={doc.version?.parsedText ?? ''} value={selected} />
             </ScrollArea>
           </Card>

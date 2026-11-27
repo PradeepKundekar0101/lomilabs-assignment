@@ -49,13 +49,14 @@ export function UploadDialog({ documentId }: { documentId?: string }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button variant={documentId ? 'outline' : 'default'}>
+        {/* Page-level actions take the design system's full 43px button. */}
+        <Button variant={documentId ? 'outline' : 'default'} size="lg" className="h-10.75 px-5">
           <Upload aria-hidden />
           {label}
         </Button>
       </DialogTrigger>
-      <DialogContent>
-        <form onSubmit={onSubmit} className="grid gap-4">
+      <DialogContent className="sm:max-w-md">
+        <form onSubmit={onSubmit} className="grid gap-5">
           <DialogHeader>
             <DialogTitle>{label}</DialogTitle>
             <DialogDescription>
@@ -68,7 +69,7 @@ export function UploadDialog({ documentId }: { documentId?: string }) {
             <div className="grid gap-2">
               <Label htmlFor="upload-type">Type</Label>
               <Select value={type ?? ''} onValueChange={(v) => setType(DocumentTypeSchema.parse(v))}>
-                <SelectTrigger id="upload-type" className="w-full">
+                <SelectTrigger id="upload-type" className="w-full data-[size=default]:h-10">
                   <SelectValue placeholder="Choose a type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -83,7 +84,13 @@ export function UploadDialog({ documentId }: { documentId?: string }) {
           )}
           <div className="grid gap-2">
             <Label htmlFor="upload-file">PDF file</Label>
-            <Input id="upload-file" type="file" accept="application/pdf,.pdf" onChange={(e) => (setFile(e.target.files?.[0]), upload.reset())} />
+            <Input
+              id="upload-file"
+              type="file"
+              accept="application/pdf,.pdf"
+              className="h-10 px-3 py-2 file:mr-3"
+              onChange={(e) => (setFile(e.target.files?.[0]), upload.reset())}
+            />
           </div>
           {upload.error && (
             <Alert variant="destructive">
@@ -91,7 +98,7 @@ export function UploadDialog({ documentId }: { documentId?: string }) {
             </Alert>
           )}
           <DialogFooter>
-            <Button type="submit" disabled={!file || (!documentId && !type) || upload.isPending}>
+            <Button type="submit" size="lg" className="h-10.75 px-5" disabled={!file || (!documentId && !type) || upload.isPending}>
               {upload.isPending ? 'Uploading...' : 'Upload'}
             </Button>
           </DialogFooter>

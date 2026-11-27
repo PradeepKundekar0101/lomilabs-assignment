@@ -2,7 +2,7 @@ import type { Review, Value } from '@lomi/shared'
 import { Check, Pencil } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 import { useReview } from '@/api/hooks'
-import { Badge } from '@/components/ui/badge'
+import { DotBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -14,22 +14,22 @@ import { fieldLabel, isChanged } from '@/lib/review'
 function ReviewBadge({ value }: { value: Value }) {
   switch (value.reviewStatus) {
     case 'pending':
-      return <Badge className="bg-amber-100 text-amber-900">Pending</Badge>
+      return <DotBadge dot="bg-amber-500">Pending</DotBadge>
     case 'approved':
-      return <Badge className="bg-green-600 text-white">Approved</Badge>
+      return <DotBadge dot="bg-emerald-500">Approved</DotBadge>
     case 'corrected':
-      return <Badge className="bg-purple-600 text-white">Corrected</Badge>
+      return <DotBadge dot="bg-violet-500">Corrected</DotBadge>
     case 'carried_over':
-      return <Badge variant="outline">Carried over{value.previous && ` from v${value.previous.versionNo}`}</Badge>
+      return <DotBadge dot="bg-brand">Carried over{value.previous && ` from v${value.previous.versionNo}`}</DotBadge>
   }
 }
 
 /** The effective value; a correction (also a carried-over one) shows the model's value struck through before it. */
-function ShownValue({ value, effectiveValue, corrected }: { value: string | null; effectiveValue: string | null; corrected: boolean }) {
+function ShownValue({ value, effectiveValue, corrected, className }: { value: string | null; effectiveValue: string | null; corrected: boolean; className?: string }) {
   return (
-    <p className="flex flex-wrap items-baseline gap-2 text-base">
-      {corrected && <s className="text-muted-foreground">{value ?? 'No value'}</s>}
-      <span className="font-semibold">{effectiveValue ?? 'No value'}</span>
+    <p className={cn('flex flex-wrap items-baseline gap-x-2.5 gap-y-1 text-primary', className)}>
+      {corrected && <s className="text-base font-normal text-muted-foreground">{value ?? 'No value'}</s>}
+      <span>{effectiveValue ?? 'No value'}</span>
     </p>
   )
 }
@@ -59,11 +59,12 @@ function CorrectForm({ value, documentId, onDone, onSaved }: { value: Value; doc
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="grid gap-3 rounded-lg border p-3">
+    <form onSubmit={onSubmit} noValidate className="grid gap-4 rounded-xl bg-muted p-4">
       <div className="grid gap-1.5">
         <Label htmlFor={`${id}-value`}>Correct value</Label>
         <Input
           id={`${id}-value`}
+          className="h-10 bg-card px-3.5"
           value={corrected}
           required
           aria-invalid={blank}
@@ -78,13 +79,13 @@ function CorrectForm({ value, documentId, onDone, onSaved }: { value: Value; doc
       </div>
       <div className="grid gap-1.5">
         <Label htmlFor={`${id}-note`}>Note (optional)</Label>
-        <Textarea id={`${id}-note`} value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
+        <Textarea id={`${id}-note`} className="bg-card px-3.5" value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
       </div>
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={review.isPending}>
+        <Button type="submit" size="lg" className="px-4" disabled={review.isPending}>
           Save correction
         </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onDone} disabled={review.isPending}>
+        <Button type="button" size="lg" variant="ghost" className="px-4" onClick={onDone} disabled={review.isPending}>
           Cancel
         </Button>
       </div>
@@ -114,7 +115,7 @@ export function ValueCard({
   const prev = value.previous
 
   return (
-    <Card onClick={onSelect} className={cn('cursor-pointer', selected && 'ring-2 ring-primary')}>
+    <Card onClick={onSelect} className={cn('cursor-pointer gap-4 transition-shadow', selected ? 'ring-2 ring-brand' : 'hover:ring-foreground/20')}>
       <CardHeader>
         <CardTitle>
           <button type="button" aria-pressed={selected} className="text-left hover:underline" onClick={onSelect}>
@@ -125,20 +126,31 @@ export function ValueCard({
           <ReviewBadge value={value} />
         </CardAction>
       </CardHeader>
-      <CardContent className="grid gap-3">
-        <ShownValue value={value.value} effectiveValue={value.effectiveValue} corrected={value.latestReview?.action === 'correct'} />
+      <CardContent className="grid gap-4">
+        <ShownValue
+          value={value.value}
+          effectiveValue={value.effectiveValue}
+          corrected={value.latestReview?.action === 'correct'}
+          className="text-xl font-semibold tracking-tight"
+        />
         {value.value === null && (
           <p className="text-sm text-muted-foreground">Why no value: {value.gapReason ?? 'the model gave no reason'}</p>
         )}
         {value.evidence && (
-          <blockquote className="border-l-2 pl-3 text-sm whitespace-pre-line text-muted-foreground italic">{value.evidence}</blockquote>
+          // Blue like the evidence marked in the document text.
+          <blockquote className="border-l-2 border-brand pl-3 text-sm whitespace-pre-line text-muted-foreground">{value.evidence}</blockquote>
         )}
         {value.latestReview?.note && <p className="text-sm">Note: {value.latestReview.note}</p>}
 
         {prev && isChanged(value) && (
-          <div className="grid gap-1 rounded-lg border border-amber-300 bg-amber-50/50 p-3">
+          <div className="grid gap-1.5 rounded-xl bg-muted p-4">
             <p className="text-xs font-medium text-muted-foreground">Previous (v{prev.versionNo})</p>
-            <ShownValue value={prev.value} effectiveValue={prev.effectiveValue} corrected={prev.latestReview?.action === 'correct'} />
+            <ShownValue
+              value={prev.value}
+              effectiveValue={prev.effectiveValue}
+              corrected={prev.latestReview?.action === 'correct'}
+              className="text-base font-medium"
+            />
             <ReviewLine review={prev.latestReview} />
           </div>
         )}
@@ -149,14 +161,17 @@ export function ValueCard({
           ) : (
             <div className="flex gap-2">
               <Button
-                size="sm"
+                // Black only where a review is still needed, so the page has one kind of primary action.
+                variant={value.reviewStatus === 'pending' ? 'default' : 'outline'}
+                size="lg"
+                className="px-4"
                 disabled={review.isPending}
                 onClick={() => review.mutate({ valueId: value.id, documentId, input: { action: 'approve' } }, { onSuccess: onReviewed })}
               >
                 <Check aria-hidden />
                 Approve
               </Button>
-              <Button size="sm" variant="outline" disabled={review.isPending} onClick={() => setCorrecting(true)}>
+              <Button size="lg" variant="outline" className="px-4" disabled={review.isPending} onClick={() => setCorrecting(true)}>
                 <Pencil aria-hidden />
                 Correct
               </Button>

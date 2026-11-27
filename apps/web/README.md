@@ -2,6 +2,7 @@
 
 The review UI (spec 008): a document list at `/` and a document's values, evidence and reviews at `/documents/:id`.
 Vite, React, TanStack Query, React Router, Tailwind CSS v4 and shadcn/ui (in `src/components/ui`, generated; edit theme tokens only).
+It follows the Lomi Labs design system (spec 008, revision 2), whose tokens live in `src/index.css`.
 
 ## Run
 

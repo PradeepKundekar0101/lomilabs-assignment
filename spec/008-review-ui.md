@@ -1,6 +1,6 @@
 # 008 Review UI
 
-Status: Done (from the user's requirements on 2026-11-27; verified 2026-11-27; in review on branch `review-ui`)
+Status: Done, revision 2 (the Lomi Labs design system, from the user on 2026-11-27; verified 2026-11-28); in review on branch `review-ui` (PR #7)
 Depends on: 002, 004, 005, 007
 
 ## Goal
@@ -67,12 +67,28 @@ Clarity matters more than polish.
 3. `packages/shared` (recreated) holds the zod schemas of these responses and the review input; the API validates reviews with the shared `ReviewInputSchema`.
 4. nginx proxies `/api/*` to the api with the prefix stripped, and accepts bodies up to the api's 11 MB upload cap; `VITE_API_URL` defaults to `/api`, and the Vite dev server proxies `/api` the same way.
 
+### 6. Design system (revision 2)
+
+The UI follows the user's "Lomi Labs" design system: calm, spacious, flat, with soft gray surfaces, black primary actions and a sky-blue accent.
+
+1. Colors: page wash `#F4F4F4`, white surfaces (cards, inputs, chips, dialogs), text `#171717`, primary actions and headlines `#09090B`, borders `#E5E7EB`, accent `#7CADE4` for highlights (the marked evidence, the selected value, focus rings), error `#EF4444`.
+2. Supporting text is `#6B6B74`, not the design's `#8A8A93`, which fails WCAG AA contrast for body text (3.4:1 on white); the user chose this on 2026-11-27.
+3. Type: Plus Jakarta Sans for everything, Geist Mono for the parsed document text.
+   The design's scale maps onto Tailwind's (`text-xs` 12px, `text-sm` 15px, `text-base` 16px, `text-lg` 18px, `text-xl` 20px), plus `headline-lg` (36px, 650) and `headline-md` (20px, 500) tokens; control labels are 560.
+4. Shapes: buttons, inputs and selects 4px, cards and dialogs 8px, chips fully rounded.
+5. Buttons: page-level actions are 43px high with 20px side padding (primary black, secondary outlined); the actions on each value card stay compact (36px) so a long list of values stays scannable.
+6. Status badges are small white chips with a colored dot (review statuses amber, green, purple; extracted green); a failed status stays a red tint, so it is never missed.
+7. Spacing uses the design's scale (6, 16, 28, 40, 56 px), within a centered page of fixed maximum width.
+8. Only theme tokens change in `src/components/ui`; everything else is classes where the components are used.
+9. Approve is the black primary action only on a pending value; on a reviewed or carried-over value it is outlined, so the page has one kind of primary action.
+10. On phones the document list shows the title, with the review counts under it, and the status; type, version and the progress bar need a wider screen.
+
 ## Out of scope
 
 - Authentication and reviewer identity.
 - A diff view between versions beyond the "Previous" block.
 - Pagination of the document list.
-- Dark mode beyond what the shadcn theme gives for free.
+- Dark mode: the design system is light only, and the app never sets the `dark` class.
 
 ## Design notes
 
@@ -101,8 +117,10 @@ Clarity matters more than polish.
   On a non-fixture lease: approve and correct (empty blocked, then saved with a note) updated badges, order and progress, and the selection moved to the next pending value.
   Upload: a non-PDF showed the API's message inline; a broken PDF appeared at once as queued, then failed (first in the list, error in the tooltip); Retry re-queued it and it failed again; a new version uploaded twice showed "This file is identical to the current version."; an unknown id shows "Not found".
   Found and fixed during E2E: clicking a card blanked the page (Chrome's `scrollIntoView` returns a Promise, which React called as the effect's cleanup; the jsdom stub now returns one too), the uppercased "PREVIOUS (V1)", a carried correction without the strikethrough, evidence left at the panel's edge, "Extracting" shown while queued, lowercase API messages, a 7-second skeleton before "Not found", and a cramped header on phones.
+- [x] Revision 2, in the browser against the compose api (Vite dev server, then the rebuilt web image): the computed styles match the tokens (page `#F4F4F4`, headline 36px at 650 with -0.02em, page buttons 43px at 15px and 560 with a 4px radius, cards 8px, supporting text `#6B6B74`); the list, the document page, the upload dialog and a failed document checked at desktop and phone width; the 11 component tests pass unchanged.
 
 ## Open questions
 
 None.
+Answered 2026-11-27 (revision 2): supporting text `#6B6B74` instead of `#8A8A93`, for WCAG AA; the redesign goes on PR #7.
 Answered 2026-11-27: recreate `@lomi/shared` with the response schemas and the review input; extend the API (list counts and error, `parsedText`) rather than fetching progress per row; drop the health page.
