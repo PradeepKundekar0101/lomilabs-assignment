@@ -21,7 +21,7 @@ A Postgres schema for documents, their versions, extraction attempts, extracted 
 10. A correction never overwrites `extracted_values.value`; it lives in `reviews.corrected_value`.
 11. Index on `document_versions(status, lease_until)` and on every foreign key.
 12. The package exports the schema types and a db client.
-13. A `migrate` script, and a one-shot `migrate` compose service that `api` and `worker` wait on.
+13. A `migrate` script, and a one-shot `migrate` compose service that `api` and `worker` wait on (renamed `migrate-seed` by spec 006).
 
 ## Decisions taken during implementation
 

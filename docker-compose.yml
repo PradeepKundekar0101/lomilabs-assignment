@@ -63,15 +63,30 @@ services:
       minio:
         condition: service_healthy
 
-  migrate:
+  # One-shot: apply migrations, then seed version 1 of each fixture document through the upload path.
+  # The api image carries @lomi/db with its migrations and the Prisma CLI.
+  migrate-seed:
     build:
       context: .
-      dockerfile: packages/db/Dockerfile
+      dockerfile: apps/api/Dockerfile
+    command: ["sh", "-c", "cd node_modules/@lomi/db && node_modules/.bin/prisma migrate deploy && cd /app && exec node dist/seed.js"]
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-lomi}:${POSTGRES_PASSWORD:-lomi}@postgres:5432/${POSTGRES_DB:-lomi}
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-lomi-documents}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-lomi}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-lomisecret}
+      FIXTURES_DIR: /fixtures
+    volumes:
+      - ./fixtures:/fixtures:ro
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
   api:
     build:
@@ -91,7 +106,7 @@ services:
     depends_on:
       minio-init:
         condition: service_completed_successfully
-      migrate:
+      migrate-seed:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
@@ -117,7 +132,7 @@ services:
     depends_on:
       minio-init:
         condition: service_completed_successfully
-      migrate:
+      migrate-seed:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
