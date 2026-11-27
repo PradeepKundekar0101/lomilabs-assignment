@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import type { AddressInfo, Server } from "node:net";
 import { ExpectedFieldsSchema } from "@lomi/core";
 import { createDb, type PrismaClient, type ReviewStatus, type VersionStatus } from "@lomi/db";
+import { DocumentListSchema, DocumentViewSchema, ProgressSchema } from "@lomi/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import { createVersion } from "./create-version.js";
@@ -54,7 +55,7 @@ describe.skipIf(!dbUrl)("review API against Postgres", () => {
 
   async function addVersion(documentId: string, versionNo: number, status: VersionStatus, values: (SeedValue & { previousValueId?: string })[]) {
     const version = await db.documentVersion.create({
-      data: { documentId, versionNo, status, storageKey: "pdfs/test.pdf", sha256: "test", sizeBytes: 1, mimeType: "application/pdf" },
+      data: { documentId, versionNo, status, storageKey: "pdfs/test.pdf", sha256: "test", sizeBytes: 1, mimeType: "application/pdf", parsedText: `text of v${versionNo}` },
     });
     await db.document.update({ where: { id: documentId }, data: { currentVersionId: version.id } });
     const ids: Record<string, string> = {};
@@ -202,7 +203,9 @@ describe.skipIf(!dbUrl)("review API against Postgres", () => {
     const { documentId, v1, v2 } = await seedTwoVersions();
     const { status, body } = await call(`/documents/${documentId}`);
     expect(status).toBe(200);
-    expect(body).toMatchObject({ id: documentId, currentVersion: { versionNo: 2, status: "extracted" }, version: { versionNo: 2 } });
+    expect(body).toMatchObject({ id: documentId, currentVersion: { versionNo: 2, status: "extracted" }, version: { versionNo: 2, parsedText: "text of v2" } });
+    expect(body.currentVersion).not.toHaveProperty("parsedText");
+    DocumentViewSchema.parse(body);
     // Pending first (the gap last among them), then corrected, approved, carried over.
     expect(body.values.map((v: { fieldKey: string }) => v.fieldKey)).toEqual(["issue_date", "invoice_number", "total_amount", "vendor_name", "due_date"]);
 
@@ -227,7 +230,8 @@ describe.skipIf(!dbUrl)("review API against Postgres", () => {
 
     // Version 1 stays readable, with its own reviews.
     const old = await call(`/documents/${documentId}/versions/1`);
-    expect(old.body).toMatchObject({ currentVersion: { versionNo: 2 }, version: { versionNo: 1, status: "superseded" } });
+    expect(old.body).toMatchObject({ currentVersion: { versionNo: 2 }, version: { versionNo: 1, status: "superseded", parsedText: "text of v1" } });
+    DocumentViewSchema.parse(old.body);
     const oldTotal = old.body.values.find((v: { fieldKey: string }) => v.fieldKey === "total_amount");
     expect(oldTotal).toMatchObject({ id: v1.total_amount, reviewStatus: "corrected", effectiveValue: "$5,230.29", previous: null });
     expect((await call(`/documents/${documentId}/versions/3`)).status).toBe(404);
@@ -235,10 +239,28 @@ describe.skipIf(!dbUrl)("review API against Postgres", () => {
     expect((await call(`/documents/test-${randomUUID()}/versions/1`)).status).toBe(404);
   });
 
+  it("lists documents with the current version's error and review counts", async () => {
+    const { documentId } = await seedTwoVersions();
+    const failed = await seedInvoice([]);
+    await db.documentVersion.update({ where: { id: failed.versionId }, data: { status: "failed", error: "llm_request_failed" } });
+
+    const { status, body } = await call("/documents");
+    expect(status).toBe(200);
+    // Other test files share the database, so look only at this test's documents.
+    const list = DocumentListSchema.parse(body);
+    expect(list.find((d) => d.id === documentId)).toEqual({
+      id: documentId, title: "review test", type: "invoice", versionNo: 2, status: "extracted", error: null, total: 5, pending: 2,
+    });
+    expect(list.find((d) => d.id === failed.documentId)).toMatchObject({ status: "failed", error: "llm_request_failed", total: 0, pending: 0 });
+    // Newest first.
+    expect(list.findIndex((d) => d.id === failed.documentId)).toBeLessThan(list.findIndex((d) => d.id === documentId));
+  });
+
   it("counts the current version's review progress in one query, matching the rows", async () => {
     const { documentId } = await seedTwoVersions();
     const { body } = await call(`/documents/${documentId}/progress`);
     expect(body).toEqual({ versionNo: 2, status: "extracted", total: 5, pending: 2, approved: 1, corrected: 1, carriedOver: 1, gaps: 1 });
+    ProgressSchema.parse(body);
 
     const rows = await db.extractedValue.findMany({ where: { version: { documentId, versionNo: 2 } } });
     const count = (s: ReviewStatus) => rows.filter((r) => r.reviewStatus === s).length;

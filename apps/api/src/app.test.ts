@@ -25,9 +25,10 @@ const baseDeps: AppDeps = {
   db: {
     document: {
       findUnique: async ({ where }: { where: { id: string } }) => (where.id === DOC_ID ? storedDoc : null),
-      // Shaped like the route's select, as Prisma would return it.
-      findMany: async () => [{ id: DOC_ID, title: "march.pdf", type: "invoice", currentVersion: { versionNo: 1, status: "queued" } }],
     },
+    documentVersion: { findUnique: async () => ({ ...storedDoc.currentVersion, parsedText: "Invoice" }) },
+    // The document list's one query, shaped as its SELECT returns it.
+    $queryRaw: async () => [{ id: DOC_ID, title: "march.pdf", type: "invoice", versionNo: 1, status: "queued", error: null, total: 0, pending: 0 }],
     extractedValue: { findMany: async () => [] },
     $transaction: fail,
   } as unknown as AppDeps["db"],
@@ -177,7 +178,7 @@ describe("GET /documents/:id", () => {
         type: "invoice",
         createdAt: "2026-11-27T10:00:00.000Z",
         currentVersion,
-        version: currentVersion,
+        version: { ...currentVersion, parsedText: "Invoice" },
         values: [],
       },
     });
@@ -216,10 +217,10 @@ describe("POST /values/:id/review", () => {
 });
 
 describe("GET /documents", () => {
-  it("lists documents with their current version number and status", async () => {
+  it("lists documents with their current version, its error and its review counts", async () => {
     expect(await request("/documents")).toEqual({
       status: 200,
-      body: [{ id: DOC_ID, title: "march.pdf", type: "invoice", versionNo: 1, status: "queued" }],
+      body: [{ id: DOC_ID, title: "march.pdf", type: "invoice", versionNo: 1, status: "queued", error: null, total: 0, pending: 0 }],
     });
   });
 });

@@ -1,15 +1,6 @@
 import type { ExpectedField } from "@lomi/core";
 import type { Prisma, PrismaClient, ReviewStatus } from "@lomi/db";
-import { z } from "zod";
-
-const note = z.string().max(1000).optional();
-
-/** Strict, so an approve that carries a correctedValue is rejected rather than silently stripped. */
-export const ReviewInputSchema = z.discriminatedUnion("action", [
-  z.strictObject({ action: z.literal("approve"), note }),
-  z.strictObject({ action: z.literal("correct"), correctedValue: z.string().trim().min(1), note }),
-]);
-export type ReviewInput = z.infer<typeof ReviewInputSchema>;
+import type { DocumentListItem, ReviewInput } from "@lomi/shared";
 
 const latestReview = {
   select: { action: true, correctedValue: true, note: true, createdAt: true },
@@ -76,10 +67,12 @@ export async function documentView(db: PrismaClient, fields: Record<string, Expe
     select: { id: true, title: true, type: true, createdAt: true, currentVersion: { select: versionSelect } },
   });
   if (!doc) return null;
+  const no = versionNo ?? doc.currentVersion?.versionNo;
+  // Only `version` carries the parsed text its evidence offsets point into, so the current version's is not sent twice.
   const version =
-    versionNo === undefined
-      ? doc.currentVersion
-      : await db.documentVersion.findUnique({ where: { documentId_versionNo: { documentId, versionNo } }, select: versionSelect });
+    no === undefined
+      ? null
+      : await db.documentVersion.findUnique({ where: { documentId_versionNo: { documentId, versionNo: no } }, select: { ...versionSelect, parsedText: true } });
   if (versionNo !== undefined && !version) return null;
   const values = version ? await db.extractedValue.findMany({ where: { versionId: version.id }, select: valueSelect }) : [];
   return { ...doc, version, values: sortForReview(values.map(toValueView), fields[doc.type]) };
@@ -151,4 +144,18 @@ export async function documentProgress(db: PrismaClient, documentId: string): Pr
     WHERE d.id = ${documentId}
     GROUP BY v.id`;
   return progress ?? null;
+}
+
+/** Every document, newest first, with its current version and that version's review counts, in one query. */
+export async function documentList(db: PrismaClient): Promise<DocumentListItem[]> {
+  // shortcut: unpaginated, add cursor pagination when the list gets long.
+  return db.$queryRaw<DocumentListItem[]>`
+    SELECT d.id, d.title, d.type::text AS type, v.version_no AS "versionNo", v.status::text AS status, v.error,
+      count(ev.id)::int AS total,
+      count(*) FILTER (WHERE ev.review_status = 'pending')::int AS pending
+    FROM documents d
+    LEFT JOIN document_versions v ON v.id = d.current_version_id
+    LEFT JOIN extracted_values ev ON ev.version_id = v.id
+    GROUP BY d.id, v.id
+    ORDER BY d.created_at DESC`;
 }
