@@ -5,6 +5,7 @@ import { createVersion, StorageUnavailableError, type CreateVersionDeps } from "
 const bytes = "%PDF-1.7 test";
 const sha = createHash("sha256").update(bytes).digest("hex");
 const file = () => new File([bytes], "march.pdf");
+const newDoc = { type: "invoice", title: "march.pdf" } as const;
 
 type Step = "put" | "tx" | "enqueue";
 
@@ -19,7 +20,9 @@ function fakeDeps(opts: { fail?: Partial<Record<Step, true>>; existing?: { curre
       findUniqueOrThrow: async ({ where }: { where: { id: string } }) => (
         calls.push("find document"), { id: where.id, currentVersionId: opts.existing?.currentVersionId ?? null }
       ),
-      create: async ({ data }: { data: { title: string } }) => (calls.push(`insert document "${data.title}"`), { id: "doc-1", currentVersionId: null }),
+      create: async ({ data }: { data: { id?: string; title: string } }) => (
+        calls.push(`insert document "${data.title}"`), { id: data.id ?? "doc-1", currentVersionId: null }
+      ),
       update: async ({ data }: { data: { currentVersionId: string } }) => calls.push(`set current ${data.currentVersionId}`),
     },
     documentVersion: {
@@ -49,7 +52,7 @@ function fakeDeps(opts: { fail?: Partial<Record<Step, true>>; existing?: { curre
 describe("createVersion", () => {
   it("puts the object, then inserts a queued version 1 in one transaction, then enqueues", async () => {
     const { deps, calls, versions } = fakeDeps();
-    expect(await createVersion(deps, null, file(), "invoice")).toEqual({ documentId: "doc-1", versionId: "ver-new", status: "queued" });
+    expect(await createVersion(deps, newDoc, file())).toEqual({ documentId: "doc-1", versionId: "ver-new", status: "queued" });
     expect(calls).toEqual([
       `put pdfs/${sha}.pdf`,
       "begin",
@@ -70,26 +73,32 @@ describe("createVersion", () => {
     });
   });
 
+  it("creates a new document with a chosen id", async () => {
+    const { deps, versions } = fakeDeps();
+    expect(await createVersion(deps, { ...newDoc, id: "doc-invoice-001" }, file())).toMatchObject({ documentId: "doc-invoice-001" });
+    expect(versions[0]).toMatchObject({ documentId: "doc-invoice-001", versionNo: 1 });
+  });
+
   it("touches no rows when object storage is down", async () => {
     const { deps, calls } = fakeDeps({ fail: { put: true } });
-    await expect(createVersion(deps, null, file(), "invoice")).rejects.toBeInstanceOf(StorageUnavailableError);
+    await expect(createVersion(deps, newDoc, file())).rejects.toBeInstanceOf(StorageUnavailableError);
     expect(calls).toEqual([`put pdfs/${sha}.pdf`]);
   });
 
   it("does not enqueue when the transaction fails", async () => {
     const { deps, calls } = fakeDeps({ fail: { tx: true } });
-    await expect(createVersion(deps, null, file(), "invoice")).rejects.toThrow("tx down");
+    await expect(createVersion(deps, newDoc, file())).rejects.toThrow("tx down");
     expect(calls.some((c) => c.startsWith("enqueue"))).toBe(false);
   });
 
   it("still succeeds with the row queued when Redis is down", async () => {
     const { deps } = fakeDeps({ fail: { enqueue: true } });
-    await expect(createVersion(deps, null, file(), "invoice")).resolves.toMatchObject({ status: "queued" });
+    await expect(createVersion(deps, newDoc, file())).resolves.toMatchObject({ status: "queued" });
   });
 
   it("adds the next version to an existing document and supersedes its current version", async () => {
     const { deps, calls, versions } = fakeDeps({ existing: { currentVersionId: "ver-old", maxVersionNo: 3 } });
-    expect(await createVersion(deps, "doc-9", file(), "invoice")).toMatchObject({ documentId: "doc-9", versionId: "ver-new" });
+    expect(await createVersion(deps, { documentId: "doc-9" }, file())).toMatchObject({ documentId: "doc-9", versionId: "ver-new" });
     expect(versions[0]).toMatchObject({ documentId: "doc-9", versionNo: 4 });
     expect(calls).toEqual([
       `put pdfs/${sha}.pdf`,

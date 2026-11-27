@@ -1,6 +1,6 @@
 import { DocumentType, type PrismaClient } from "@lomi/db";
 import express, { type Express } from "express";
-import { StorageUnavailableError, type CreateVersionResult } from "./create-version.js";
+import { StorageUnavailableError, type CreateVersionResult, type VersionTarget } from "./create-version.js";
 
 export interface HealthChecks {
   db: () => Promise<unknown>;
@@ -10,7 +10,7 @@ export interface HealthChecks {
 export interface AppDeps {
   checks: HealthChecks;
   db: Pick<PrismaClient, "document">;
-  createVersion: (documentId: string | null, file: File, type: DocumentType) => Promise<CreateVersionResult>;
+  createVersion: (target: VersionTarget, file: File) => Promise<CreateVersionResult>;
 }
 
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
@@ -61,7 +61,7 @@ export function createApp({ checks, db, createVersion }: AppDeps): Express {
       return void res.status(400).json({ error: "file is not a PDF" });
     }
     try {
-      const { documentId, versionId, status } = await createVersion(null, file, type as DocumentType);
+      const { documentId, versionId, status } = await createVersion({ type: type as DocumentType, title: file.name || "untitled" }, file);
       res.status(202).json({ id: documentId, versionId, status });
     } catch (err) {
       console.error("upload failed", err);

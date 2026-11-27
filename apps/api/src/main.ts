@@ -56,7 +56,7 @@ const server = createApp({
     redis: () => redis.ping(),
   },
   db,
-  createVersion: (documentId, file, type) => createVersion(versionDeps, documentId, file, type),
+  createVersion: (target, file) => createVersion(versionDeps, target, file),
 }).listen(port, () => console.log(`api listening on :${port}`));
 
 process.on("SIGTERM", () => {

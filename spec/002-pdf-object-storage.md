@@ -17,10 +17,10 @@ Clients can list documents and read one document with its current version, witho
    - `400` unless `type` is `invoice | lease | market_report`, `file` is a file part, the file starts with `%PDF-`, and it is at most 10 MB.
    - `415` when the body is not `multipart/form-data`.
    - The document title is the uploaded file's name.
-5. Steps after validation live in one reusable service, `createVersion(documentId | null, file, type)`:
+5. Steps after validation live in one reusable service, `createVersion(target, file)`, where `target` is `{documentId}` or a new document `{id?, type, title}` (spec 006 replaced `documentId | null` and `type`):
    1. sha256 the file; key `pdfs/<sha256>.pdf`.
    2. Put the object. If that fails, respond `503` and write nothing.
-   3. In one transaction: insert the document (when `documentId` is null), insert the version (`status = queued`, `storage_key`, `sha256`, `size_bytes`, `mime_type`), and set `documents.current_version_id`.
+   3. In one transaction: insert the document (for a new-document target), insert the version (`status = queued`, `storage_key`, `sha256`, `size_bytes`, `mime_type`), and set `documents.current_version_id`.
    4. Enqueue BullMQ job `extract` on queue `extraction` with data `{versionId}` and `jobId = versionId`. If enqueue fails, log it and still succeed; the row stays `queued` for the reconciler (003).
 6. A successful upload responds `202 {id, versionId, status: "queued"}` without waiting for extraction.
 7. `GET /documents/:id` returns the document, its current version (`id`, `versionNo`, `status`, `error`, `attempts`, `createdAt`) and `values: []`. `404` when the document does not exist.
@@ -36,7 +36,7 @@ Clients can list documents and read one document with its current version, witho
   - `enableOfflineQueue: false` on its connection covers Redis going down after the api started. With the offline queue on, `queue.add` waits for Redis to come back.
   - `skipWaitingForReady: true` covers the api starting while Redis is down. Without it BullMQ holds every command until the first connection is ready, and the upload hung past 20 seconds in the E2E run.
   - `skipVersionCheck: true` is required with the previous option, because the version check's `INFO` would fail that first connection permanently.
-- `createVersion` with a non-null `documentId` gives the next `version_no`, marks the previous current version `superseded`, and moves `current_version_id`.
+- `createVersion` with a `{documentId}` target gives the next `version_no`, marks the previous current version `superseded`, and moves `current_version_id`.
   No route calls it yet; spec 005 adds `POST /documents/:id/versions`, the retry for the concurrent-upload race on `(document_id, version_no)`, and carry-over.
 - `values` is always `[]` until extraction (003) and the review API (004) exist; 004 fills it.
 - Content addressed keys: re-uploading identical bytes rewrites the same object.

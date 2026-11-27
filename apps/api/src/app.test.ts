@@ -69,8 +69,8 @@ describe("POST /documents", () => {
   it("returns 202 with the queued version and passes the file to createVersion", async () => {
     const r = await upload(form("lease", pdf()));
     expect(r).toMatchObject({ status: 202, body: { id: DOC_ID, versionId: "ver-1", status: "queued" } });
-    const [documentId, file, type] = r.calls[0]!;
-    expect({ documentId, name: file.name, type }).toEqual({ documentId: null, name: "march.pdf", type: "lease" });
+    const [target, file] = r.calls[0]!;
+    expect({ target, name: file.name }).toEqual({ target: { type: "lease", title: "march.pdf" }, name: "march.pdf" });
   });
 
   it("rejects invalid uploads with 400 before calling createVersion", async () => {
