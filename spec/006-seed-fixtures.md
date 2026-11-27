@@ -1,6 +1,6 @@
 # 006 Seed the fixture documents
 
-Status: Done (verified 2026-11-27 on branch `upload-api`, not yet committed; requirements given by the user)
+Status: Done (verified 2026-11-27 in PR #2; requirements given by the user)
 Depends on: 002, 003
 
 ## Goal
