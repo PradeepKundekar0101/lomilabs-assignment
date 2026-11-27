@@ -12,5 +12,7 @@ FROM node:26-alpine
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /out .
+COPY --from=build /repo/fixtures/expected-fields.json fixtures/expected-fields.json
+ENV EXPECTED_FIELDS_PATH=/app/fixtures/expected-fields.json
 USER node
 CMD ["node", "dist/main.js"]

@@ -12,7 +12,7 @@ datasource db {
 enum DocumentType {
   invoice
   lease
-  report
+  market_report
 
   @@map("document_type")
 }
@@ -99,7 +99,8 @@ model ExtractionRun {
   version     DocumentVersion @relation(fields: [versionId], references: [id])
   attempt     Int
   model       String
-  prompt      String
+  // Null until the prompt is built: the run row is inserted at claim time, before parsing.
+  prompt      String?
   rawResponse String?         @map("raw_response")
   // Null while the attempt is still running.
   outcome     RunOutcome?

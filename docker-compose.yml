@@ -104,8 +104,19 @@ services:
       dockerfile: apps/worker/Dockerfile
     restart: unless-stopped
     environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-lomi}:${POSTGRES_PASSWORD:-lomi}@postgres:5432/${POSTGRES_DB:-lomi}
       REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-lomi-documents}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-lomi}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-lomisecret}
+      # Without a key the worker still runs; each extraction fails visibly with llm_request_failed.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-claude-opus-5-5}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
     depends_on:
+      minio-init:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
       postgres:

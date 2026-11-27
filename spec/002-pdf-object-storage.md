@@ -14,7 +14,7 @@ Clients can list documents and read one document with its current version, witho
 2. MinIO runs in docker-compose with a named volume (`minio-data`) and a one-shot `minio-init` service that creates the bucket.
 3. The api reads `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` from the environment and fails fast if any is missing.
 4. `POST /documents` takes `multipart/form-data` with fields `type` and `file`.
-   - `400` unless `type` is `invoice | lease | report`, `file` is a file part, the file starts with `%PDF-`, and it is at most 10 MB.
+   - `400` unless `type` is `invoice | lease | market_report`, `file` is a file part, the file starts with `%PDF-`, and it is at most 10 MB.
    - `415` when the body is not `multipart/form-data`.
    - The document title is the uploaded file's name.
 5. Steps after validation live in one reusable service, `createVersion(documentId | null, file, type)`:
