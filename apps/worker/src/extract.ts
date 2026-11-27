@@ -15,7 +15,12 @@ export interface ExtractDeps {
   llm: Llm;
   model: string;
   fields: ExpectedFields;
+  /** How long a claim lasts without a heartbeat; the heartbeat renews it every third of that. */
+  leaseSeconds: number;
 }
+
+/** Claims allowed per version before it is failed: only attempts that never finished (a crash) reach it. */
+export const MAX_ATTEMPTS = 3;
 
 export type ExtractOutcome = "not_claimable" | "superseded" | "extracted" | "failed";
 
@@ -26,26 +31,39 @@ interface ClaimedVersion {
   attempts: number;
 }
 
-/** Runs one extraction attempt for a version (spec 003). Never throws for an extraction failure. */
+/** Runs one extraction attempt for a version (specs 003, 007). Never throws for an extraction failure. */
 export async function processVersion(deps: ExtractDeps, versionId: string): Promise<ExtractOutcome> {
   const { db } = deps;
 
-  // 1. Claim: only a queued version, or one whose previous attempt's lease ran out.
+  // 1. Claim: only a queued version, or one whose previous attempt's lease ran out, with attempts left.
+  const lease = deps.leaseSeconds;
   const [version] = await db.$queryRaw<ClaimedVersion[]>`
     UPDATE document_versions
-    SET status = 'extracting', lease_until = now() + interval '5 minutes',
+    SET status = 'extracting', lease_until = now() + make_interval(secs => ${lease}),
         attempts = attempts + 1, error = null, updated_at = now()
-    WHERE id = ${versionId}::uuid
+    WHERE id = ${versionId}::uuid AND attempts < ${MAX_ATTEMPTS}
       AND (status = 'queued' OR (status = 'extracting' AND lease_until < now()))
     RETURNING id, document_id, storage_key, attempts`;
   if (!version) {
-    console.log(`version ${versionId}: not claimable`);
-    return "not_claimable";
+    // Claimable but out of attempts: every earlier attempt died mid-way (e.g. a PDF that crashes the worker).
+    const gaveUp = await db.$executeRaw`
+      UPDATE document_versions
+      SET status = 'failed', error = ${`too_many_attempts: ${MAX_ATTEMPTS} attempts did not finish`}, lease_until = null, updated_at = now()
+      WHERE id = ${versionId}::uuid AND attempts >= ${MAX_ATTEMPTS}
+        AND (status = 'queued' OR (status = 'extracting' AND lease_until < now()))`;
+    console.log(`version ${versionId}: ${gaveUp ? "failed, too many attempts" : "not claimable"}`);
+    return gaveUp ? "failed" : "not_claimable";
   }
   const run = await db.extractionRun.create({
     data: { versionId, attempt: version.attempts, model: deps.model },
     select: { id: true },
   });
+  // Keeps the claim while this attempt runs; once this process dies, the lease expires and the reconciler re-enqueues.
+  const heartbeat = setInterval(() => {
+    db.$executeRaw`
+      UPDATE document_versions SET lease_until = now() + make_interval(secs => ${lease})
+      WHERE id = ${versionId}::uuid AND status = 'extracting'`.catch((err) => console.error(`version ${versionId}: heartbeat failed`, err));
+  }, (lease * 1000) / 3).unref();
 
   const supersede = async (tx: Pick<PrismaClient, "documentVersion" | "extractionRun"> = db) => {
     await tx.documentVersion.update({ where: { id: versionId }, data: { status: "superseded", leaseUntil: null } });
@@ -104,5 +122,7 @@ export async function processVersion(deps: ExtractDeps, versionId: string): Prom
     await db.documentVersion.updateMany({ where: { id: versionId, status: "extracting" }, data: { status: "failed", error, leaseUntil: null } });
     await db.extractionRun.update({ where: { id: run.id }, data: { outcome: "failed", error, finishedAt: new Date() } });
     return "failed";
+  } finally {
+    clearInterval(heartbeat);
   }
 }

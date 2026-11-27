@@ -4,7 +4,7 @@ import { createDb, type PrismaClient } from "@lomi/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { processVersion, type ExtractDeps } from "./extract.js";
 
-// Runs against a real Postgres (the compose one): TEST_DATABASE_URL=postgres://lomi:lomi@127.0.0.1:5433/lomi
+// Runs against a dedicated test database (see spec 007): TEST_DATABASE_URL=postgres://lomi:lomi@127.0.0.1:5433/lomi_test
 const url = process.env.TEST_DATABASE_URL;
 const fixture = (path: string) => readFileSync(new URL(`../../../fixtures/${path}`, import.meta.url));
 const fields = ExpectedFieldsSchema.parse(JSON.parse(fixture("expected-fields.json").toString()));
@@ -40,6 +40,7 @@ describe.skipIf(!url)("processVersion against Postgres", () => {
     llm: fakeLlm(),
     model: "fake-model",
     fields,
+    leaseSeconds: 60,
     ...over,
   });
 
