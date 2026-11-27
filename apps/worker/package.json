@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./extract": "./dist/extract.js"
+  },
   "scripts": {
     "start": "node dist/main.js",
     "build": "tsc -p tsconfig.build.json",

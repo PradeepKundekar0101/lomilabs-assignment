@@ -10,6 +10,7 @@ export interface CreateVersionDeps {
 export interface CreateVersionResult {
   documentId: string;
   versionId: string;
+  versionNo: number;
   status: VersionStatus;
 }
 
@@ -23,9 +24,19 @@ export class StorageUnavailableError extends Error {
   }
 }
 
+/** A new version of an existing document was refused, and no row was written. */
+export class VersionRejectedError extends Error {
+  constructor(readonly reason: "document_not_found" | "identical_to_current") {
+    super(reason);
+  }
+}
+
 const PDF_MIME = "application/pdf";
 
-/** Stores a validated PDF as a new queued version of `target`, superseding an existing document's current version. */
+/**
+ * Stores a validated PDF as a new queued, current version of `target`. A previous version keeps its status:
+ * one still being extracted supersedes itself at commit, and an extracted one is the base for carry-over (spec 005).
+ */
 export async function createVersion(deps: CreateVersionDeps, target: VersionTarget, file: File): Promise<CreateVersionResult> {
   const bytes = Buffer.from(await file.arrayBuffer());
   const sha256 = createHash("sha256").update(bytes).digest("hex");
@@ -40,16 +51,25 @@ export async function createVersion(deps: CreateVersionDeps, target: VersionTarg
   }
 
   const result = await deps.db.$transaction(async (tx) => {
-    const docFields = { id: true, currentVersionId: true } as const;
-    const doc =
-      "documentId" in target
-        ? await tx.document.findUniqueOrThrow({ where: { id: target.documentId }, select: docFields })
-        : await tx.document.create({ data: { id: target.id, type: target.type, title: target.title }, select: docFields });
-    const { _max } = await tx.documentVersion.aggregate({ where: { documentId: doc.id }, _max: { versionNo: true } });
-    // shortcut: concurrent uploads to one document race on (document_id, version_no) and the loser fails; spec 005 adds the retry.
+    let documentId: string;
+    if ("documentId" in target) {
+      // The lock reviews and the worker's commit take: concurrent uploads of one document queue here, so the
+      // max below is never stale, and a review or carry-over never interleaves with the new version.
+      const [doc] = await tx.$queryRaw<{ id: string; current_sha256: string | null }[]>`
+        SELECT d.id, v.sha256 AS current_sha256
+        FROM documents d LEFT JOIN document_versions v ON v.id = d.current_version_id
+        WHERE d.id = ${target.documentId}
+        FOR UPDATE OF d`;
+      if (!doc) throw new VersionRejectedError("document_not_found");
+      if (doc.current_sha256 === sha256) throw new VersionRejectedError("identical_to_current");
+      documentId = doc.id;
+    } else {
+      ({ id: documentId } = await tx.document.create({ data: { id: target.id, type: target.type, title: target.title }, select: { id: true } }));
+    }
+    const { _max } = await tx.documentVersion.aggregate({ where: { documentId }, _max: { versionNo: true } });
     const version = await tx.documentVersion.create({
       data: {
-        documentId: doc.id,
+        documentId,
         versionNo: (_max.versionNo ?? 0) + 1,
         status: "queued",
         storageKey,
@@ -57,13 +77,10 @@ export async function createVersion(deps: CreateVersionDeps, target: VersionTarg
         sizeBytes: bytes.length,
         mimeType: PDF_MIME,
       },
-      select: { id: true, status: true },
+      select: { id: true, versionNo: true, status: true },
     });
-    if (doc.currentVersionId) {
-      await tx.documentVersion.update({ where: { id: doc.currentVersionId }, data: { status: "superseded" } });
-    }
-    await tx.document.update({ where: { id: doc.id }, data: { currentVersionId: version.id } });
-    return { documentId: doc.id, versionId: version.id, status: version.status };
+    await tx.document.update({ where: { id: documentId }, data: { currentVersionId: version.id } });
+    return { documentId, versionId: version.id, versionNo: version.versionNo, status: version.status };
   });
 
   // The committed row (status queued) is the source of truth and the reconciler re-enqueues it;

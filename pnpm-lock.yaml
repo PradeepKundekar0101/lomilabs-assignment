@@ -225,6 +225,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
+      '@lomi/worker':
+        specifier: workspace:*
+        version: link:../worker
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6

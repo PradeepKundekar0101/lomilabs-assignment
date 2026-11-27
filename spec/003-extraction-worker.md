@@ -52,6 +52,8 @@ Pure logic lives in `packages/core` so it is unit-tested without Postgres, Redis
   - v1 before its model call: requirement 4 stops it without calling the model.
   - v1 after its model call, before commit: requirement 7 sees v2 is current and writes nothing; v2's run provides the values.
   - v1 committed just before v2's upload: v1 keeps its values and is then marked `superseded`. That is correct, and spec 005 uses those values as v2's prior version.
+  - Spec 005 changed the upload: it no longer marks v1 `superseded`, and it takes the document lock itself.
+    A `queued` v1 is claimed, parsed and superseded by requirement 4 without a model call; an extracted v1 stays `extracted` and is the base for carry-over.
 - `extraction_runs.prompt` becomes nullable (new migration): the run row exists before the prompt can be built, so parse failures are recorded on it.
 - The document type `report` is renamed to `market_report` (new migration) to match `fixtures/expected-fields.json` and `fixtures/documents.json` from the assignment.
 - **No `temperature: 0`.** The default model (`claude-opus-5-5`) rejects sampling parameters with a 400, and so does API version `2026-10-21` on every model. Determinism comes from structured output plus evidence validation; `effort` is set explicitly to `medium`.

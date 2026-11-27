@@ -2,7 +2,7 @@ import type { ExpectedFields } from "@lomi/core";
 import { DocumentType, type PrismaClient } from "@lomi/db";
 import express, { type Express } from "express";
 import { z } from "zod";
-import { StorageUnavailableError, type CreateVersionResult, type VersionTarget } from "./create-version.js";
+import { StorageUnavailableError, VersionRejectedError, type CreateVersionResult, type VersionTarget } from "./create-version.js";
 import type { RetryResult } from "./retry.js";
 import { documentProgress, documentView, ReviewInputSchema, reviewValue } from "./review.js";
 
@@ -28,9 +28,49 @@ const MAX_PDF_BYTES = 10 * 1024 * 1024;
 const MAX_BODY_BYTES = MAX_PDF_BYTES + 64 * 1024;
 const TOO_LARGE = "file must be at most 10 MB";
 const documentTypes: readonly string[] = Object.values(DocumentType);
+const multipart = express.raw({ type: "multipart/form-data", limit: MAX_BODY_BYTES });
+
+/** Parses a multipart body with Node's built-in FormData parser. Undefined once an error response is sent. */
+async function readForm(req: express.Request, res: express.Response): Promise<FormData | undefined> {
+  if (!Buffer.isBuffer(req.body)) {
+    return void res.status(415).json({ error: "body must be multipart/form-data" });
+  }
+  // The Uint8Array copy (at most ~10 MB) is only because Node's types reject a Buffer as a BodyInit.
+  try {
+    return await new Response(new Uint8Array(req.body), { headers: { "content-type": req.get("content-type")! } }).formData();
+  } catch {
+    res.status(400).json({ error: "malformed multipart body" });
+  }
+}
+
+/** The form's `file` if it is an acceptable PDF, else why not. */
+async function readPdf(form: FormData): Promise<File | string> {
+  const file = form.get("file");
+  if (!(file instanceof File)) return "file is required";
+  if (file.size > MAX_PDF_BYTES) return TOO_LARGE;
+  if ((await file.slice(0, 5).text()) !== "%PDF-") return "file is not a PDF";
+  return file;
+}
 
 export function createApp({ checks, db, fields, createVersion, retry }: AppDeps): Express {
   const app = express();
+
+  async function upload(res: express.Response, target: VersionTarget, file: File) {
+    try {
+      const { documentId, versionId, versionNo, status } = await createVersion(target, file);
+      res.status(202).json({ id: documentId, versionId, versionNo, status });
+    } catch (err) {
+      if (err instanceof VersionRejectedError) {
+        if (err.reason === "document_not_found") return void res.status(404).json({ error: "document not found" });
+        return void res.status(409).json({ error: err.reason });
+      }
+      console.error("upload failed", err);
+      if (err instanceof StorageUnavailableError) {
+        return void res.status(503).json({ error: "object storage unavailable, try again later" });
+      }
+      res.status(500).json({ error: "upload failed" });
+    }
+  }
 
   app.get("/health", async (_req, res) => {
     const [dbCheck, redis] = await Promise.allSettled([checks.db(), checks.redis()]);
@@ -46,42 +86,26 @@ export function createApp({ checks, db, fields, createVersion, retry }: AppDeps)
     res.status(body.db === "ok" && body.redis === "ok" ? 200 : 503).json(body);
   });
 
-  // multipart/form-data with fields `type` and `file`, parsed by Node's built-in FormData parser.
-  app.post("/documents", express.raw({ type: "multipart/form-data", limit: MAX_BODY_BYTES }), async (req, res) => {
-    if (!Buffer.isBuffer(req.body)) {
-      return void res.status(415).json({ error: "body must be multipart/form-data" });
-    }
-    let form: FormData;
-    // The Uint8Array copy (at most ~10 MB) is only because Node's types reject a Buffer as a BodyInit.
-    try {
-      form = await new Response(new Uint8Array(req.body), { headers: { "content-type": req.get("content-type")! } }).formData();
-    } catch {
-      return void res.status(400).json({ error: "malformed multipart body" });
-    }
+  // multipart/form-data with fields `type` and `file`.
+  app.post("/documents", multipart, async (req, res) => {
+    const form = await readForm(req, res);
+    if (!form) return;
     const type = form.get("type");
-    const file = form.get("file");
     if (typeof type !== "string" || !documentTypes.includes(type)) {
       return void res.status(400).json({ error: `type must be one of ${documentTypes.join(", ")}` });
     }
-    if (!(file instanceof File)) {
-      return void res.status(400).json({ error: "file is required" });
-    }
-    if (file.size > MAX_PDF_BYTES) {
-      return void res.status(400).json({ error: TOO_LARGE });
-    }
-    if ((await file.slice(0, 5).text()) !== "%PDF-") {
-      return void res.status(400).json({ error: "file is not a PDF" });
-    }
-    try {
-      const { documentId, versionId, status } = await createVersion({ type: type as DocumentType, title: file.name || "untitled" }, file);
-      res.status(202).json({ id: documentId, versionId, status });
-    } catch (err) {
-      console.error("upload failed", err);
-      if (err instanceof StorageUnavailableError) {
-        return void res.status(503).json({ error: "object storage unavailable, try again later" });
-      }
-      res.status(500).json({ error: "upload failed" });
-    }
+    const file = await readPdf(form);
+    if (typeof file === "string") return void res.status(400).json({ error: file });
+    await upload(res, { type: type as DocumentType, title: file.name || "untitled" }, file);
+  });
+
+  // A new version of an existing document (spec 005): multipart/form-data with a `file`; the type is the document's.
+  app.post("/documents/:id/versions", multipart, async (req, res) => {
+    const form = await readForm(req, res);
+    if (!form) return;
+    const file = await readPdf(form);
+    if (typeof file === "string") return void res.status(400).json({ error: file });
+    await upload(res, { documentId: req.params.id }, file);
   });
 
   app.get("/documents", async (_req, res) => {

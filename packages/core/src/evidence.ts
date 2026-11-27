@@ -31,6 +31,9 @@ function normalize(original: string): { text: string; map: number[] } {
   return { text, map };
 }
 
+/** Whitespace runs collapsed to one space, trimmed: the comparison evidence validation and carry-over use. */
+export const norm = (s: string) => normalize(s).text;
+
 const gap = (fieldKey: string, gapReason: string): ValidatedValue => ({
   fieldKey,
   value: null,

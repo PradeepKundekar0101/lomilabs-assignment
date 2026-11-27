@@ -16,7 +16,7 @@ Monorepo: pnpm 12 workspaces + turbo, TypeScript 7, Node 26, vitest, oxlint.
 
 | Path | What |
 |------|------|
-| `apps/api` | Express 5 API. `POST /documents` (multipart upload), `GET /documents`, `GET /documents/:id` (with the current version's values), `GET /documents/:id/versions/:n`, `GET /documents/:id/progress`, `POST /documents/:id/retry`, `POST /values/:id/review`, `GET /health` (with version and queue counts). Also the seed (`src/seed.ts`). |
+| `apps/api` | Express 5 API. `POST /documents` (multipart upload), `POST /documents/:id/versions` (a new version of a document), `GET /documents`, `GET /documents/:id` (with the current version's values), `GET /documents/:id/versions/:n`, `GET /documents/:id/progress`, `POST /documents/:id/retry`, `POST /values/:id/review`, `GET /health` (with version and queue counts). Also the seed (`src/seed.ts`). |
 | `apps/worker` | BullMQ worker on queue `extraction`: claim with a heartbeat-renewed lease, parse, LLM, evidence check, commit (`src/extract.ts`); a reconciler re-enqueues from Postgres whatever Redis lost (`src/reconciler.ts`). |
 | `apps/web` | Vite + React. Shows `/health` only. Served by nginx, which proxies `/health` to the api. |
 | `packages/db` | Prisma 7 schema, migrations, `createDb()` client. |
@@ -38,6 +38,7 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, `pack
 - PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/4 (spec 007) was merged into `main` on 2026-11-27 as `703b84b`.
 - The `extraction-resilience` branch is fully merged; do not add to it.
 - Branch `review-api` (off `703b84b`) holds spec 004 revision 2, open for review as a PR. It was built in the worktree `../lomilabs-assignment-review-api` while another session worked in the main checkout.
+- Branch `new-versions` (off `review-api`) holds spec 005 revision 2, not yet pushed. Rebase it onto `main` once PR #5 (`review-api`) is merged.
 - New work: branch off `main` and open a PR.
 - Commits must be authored as `pradeepkundekar0101 <91021094+PradeepKundekar0101@users.noreply.github.com>`. The repo-local git config sets this; the machine's global identity is a different account.
 - The repo has no CI. Verification is local only.
@@ -50,7 +51,7 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, `pack
 | 002 PDF object storage, upload and document reads | Revision 1 merged (PR #1). Revision 2 done and verified in docker, merged (PR #2). |
 | 003 Extraction worker (happy path) | Done and verified in docker with the real model, merged (PR #2). |
 | 004 Review API | Revision 2 done and verified (integration tests, E2E in docker with the rebuilt api image), in review on branch `review-api`. |
-| 005 New versions and carry-over | Draft. |
+| 005 New versions and carry-over | Revision 2 done and verified (unit, integration against Postgres, E2E in docker with the real model), on branch `new-versions`, stacked on `review-api`. |
 | 006 Seed the fixture documents | Done and verified in docker (`down -v`, `up`, `restart`), merged (PR #2). |
 | 007 Extraction resilience (lease heartbeat, reconciler, attempt cap, retry, health counts) | Done and verified (integration tests, `scripts/chaos.sh`, retry and Redis-down checks in docker), merged (PR #4). |
 
@@ -78,7 +79,8 @@ docker compose exec -T postgres psql -U lomi -d lomi -c 'select status, error fr
 
 On a fresh stack, `migrate-seed` seeds `doc-invoice-001`, `doc-lease-001` and `doc-report-001` (version 1 each) and the worker extracts them.
 The stack was last rebuilt from empty volumes on 2026-11-27; after the spec 007 chaos and retry checks it runs with 11 documents, all `extracted`.
-The api container was rebuilt from the `review-api` worktree on 2026-11-27 (`docker compose up --no-deps --force-recreate api`; plain `up --build` kept the old container). The spec 004 E2E left reviews on two non-fixture documents, `c7dfe635…` and `d5c9a499…`; the three seeded documents have none.
+The api and worker images were rebuilt from the `new-versions` branch on 2026-11-27 (`docker compose build api worker`, then `up -d --no-deps --force-recreate api worker`; plain `up --build` kept old containers before). The build took about 13 minutes, mostly npm downloads.
+The spec 004 E2E left reviews on two non-fixture documents, `c7dfe635…` and `d5c9a499…`. The spec 005 E2E reviewed `doc-invoice-001` version 1 and uploaded version 2, which is now current with 2 pending and 3 carried-over values; the other two seeded documents have no reviews.
 The api service has no healthcheck, so `docker compose up --wait` returns before it listens; give it a second before the first request.
 
 ## Gotchas found so far (read these, they cost time)
@@ -104,8 +106,10 @@ The api service has no healthcheck, so `docker compose up --wait` returns before
 19. **Tests need their own database and Redis database.** The compose worker's reconciler enqueues every `queued` or lease-expired version in its database, so test rows in the compose `lomi` database get extracted (and failed) by the real worker. Use `lomi_test` and Redis database 1. The resilience tests' reconciler only enqueues their own versions, because other test files run in parallel against `lomi_test`.
 20. **BullMQ ignores adding a `jobId` it still holds.** Every producer adds extract jobs with `removeOnComplete` and `removeOnFail`; a kept finished job would silently swallow every retry and reconcile of that version.
 21. **A dead worker's job comes back before its lease expires.** BullMQ's stalled check (30 s lock) re-runs it, the claim refuses it (lease 60 s), and the reconciler resumes the version once the lease has expired. Tests keep that ratio (lease 1.5 s, lock 0.5 s).
-22. **The `documents` row lock orders reviews and new versions.** A review, the worker's commit and (through its foreign-key insert) an upload all take the document row first. A review's `created_at` is `clock_timestamp()` so "latest review" follows that lock order; keep both if you touch reviews or carry-over.
+22. **The `documents` row lock orders reviews and new versions.** A review, the worker's commit and an upload of a new version (`createVersion`, explicitly since spec 005) all take the document row first. A review's `created_at` is `clock_timestamp()` so "latest review" follows that lock order; keep both if you touch reviews or carry-over.
 23. **The api needs `EXPECTED_FIELDS_PATH`** (for the values' sort order), like the worker; both Dockerfiles set it.
+24. **An upload no longer supersedes the previous version** (spec 005). The worker supersedes a version that is not current when it reaches its currency checks, and an extracted version stays `extracted` as the base for carry-over. Do not add superseding back to `createVersion`.
+25. **The api's tests import the worker.** `apps/api/src/carry-over.test.ts` drives `processVersion` through `@lomi/worker/extract` (a dev dependency), so turbo builds the worker before the api's typecheck and tests.
 
 ## User preferences (from the user's global instructions)
 
