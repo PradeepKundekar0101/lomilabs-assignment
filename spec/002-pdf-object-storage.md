@@ -1,6 +1,6 @@
 # 002 PDF object storage, upload and document reads
 
-Status: Done (revision 2, verified 2026-11-27 in PR #2; revision 1 was commit `afda8d6`, PR #1)
+Status: Done (revision 2, verified 2026-11-27, merged in PR #2; revision 1 was commit `afda8d6`, PR #1)
 Depends on: 001
 
 ## Goal

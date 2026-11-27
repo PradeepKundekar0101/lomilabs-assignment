@@ -1,6 +1,6 @@
 # 003 Extraction worker (happy path)
 
-Status: Done (verified 2026-11-27 in PR #2; design given by the user)
+Status: Done (verified 2026-11-27, merged in PR #2; design given by the user)
 Depends on: 001, 002
 
 ## Goal

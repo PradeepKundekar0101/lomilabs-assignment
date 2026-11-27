@@ -16,11 +16,11 @@ Every feature starts as a numbered spec in this folder, and code follows the spe
 | # | Spec | Status |
 |---|------|--------|
 | 001 | [Database schema](001-database-schema.md) | Done |
-| 002 | [PDF object storage, upload and document reads](002-pdf-object-storage.md) | Done (revision 2 in [PR #2](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/2)) |
-| 003 | [Extraction worker (happy path)](003-extraction-worker.md) | Done ([PR #2](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/2)) |
+| 002 | [PDF object storage, upload and document reads](002-pdf-object-storage.md) | Done (revision 2 merged in [PR #2](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/2)) |
+| 003 | [Extraction worker (happy path)](003-extraction-worker.md) | Done (merged in [PR #2](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/2)) |
 | 004 | [Review API](004-review-api.md) | Draft |
 | 005 | [New versions and carry-over](005-new-versions-and-carry-over.md) | Draft |
-| 006 | [Seed the fixture documents](006-seed-fixtures.md) | Done ([PR #2](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/2)) |
+| 006 | [Seed the fixture documents](006-seed-fixtures.md) | Done (merged in [PR #2](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/2)) |
 
 ## Template
 
