@@ -62,6 +62,7 @@ Pure logic lives in `packages/core` so it is unit-tested without Postgres, Redis
 - The model call is behind an interface so worker tests use a fake.
 - The lease is not re-checked at commit: `ON CONFLICT DO NOTHING` keeps a second attempt that reclaimed an expired lease from duplicating values.
 - BullMQ keeps completed jobs, so re-enqueueing the same `jobId = versionId` is a no-op. The retry action and the sweeper (later specs) must remove the old job or use a new id.
+- Spec 007 replaced the 5-minute lease with `LEASE_SECONDS` and a heartbeat, removes finished jobs from Redis, caps attempts at 3, and adds the reconciler and the retry endpoint.
 
 ## Out of scope (later specs)
 

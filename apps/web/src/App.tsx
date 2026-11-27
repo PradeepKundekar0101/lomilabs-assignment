@@ -1,6 +1,25 @@
 import { useEffect, useState } from 'react'
 
-type Health = Record<string, string>
+type Counts = Record<string, number>
+export type Health = { db: string; redis: string; versions: Counts | null; queue: Counts | null }
+
+function Counts({ title, counts }: { title: string; counts: Counts | null }) {
+  // A service that is down already shows "error" above; there is nothing to count.
+  if (!counts) return null
+  return (
+    <>
+      <h2>{title}</h2>
+      <dl>
+        {Object.entries(counts).map(([name, n]) => (
+          <div key={name}>
+            <dt>{name}</dt>
+            <dd>{n}</dd>
+          </div>
+        ))}
+      </dl>
+    </>
+  )
+}
 
 export function HealthView({ health, error }: { health?: Health; error?: string }) {
   return (
@@ -11,14 +30,18 @@ export function HealthView({ health, error }: { health?: Health; error?: string 
       ) : !health ? (
         <p>Checking...</p>
       ) : (
-        <dl>
-          {Object.entries(health).map(([name, status]) => (
-            <div key={name}>
-              <dt>{name}</dt>
-              <dd className={status === 'ok' ? 'ok' : 'error'}>{status}</dd>
-            </div>
-          ))}
-        </dl>
+        <>
+          <dl>
+            {(['db', 'redis'] as const).map((name) => (
+              <div key={name}>
+                <dt>{name}</dt>
+                <dd className={health[name] === 'ok' ? 'ok' : 'error'}>{health[name]}</dd>
+              </div>
+            ))}
+          </dl>
+          <Counts title="Queue" counts={health.queue} />
+          <Counts title="Versions" counts={health.versions} />
+        </>
       )}
     </main>
   )

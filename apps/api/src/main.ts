@@ -1,27 +1,29 @@
-import { Redis } from "ioredis";
+import { VersionStatus } from "@lomi/db";
 import { createApp } from "./app.js";
 import { createVersion } from "./create-version.js";
+import { retryDocument } from "./retry.js";
 import { createServices } from "./services.js";
 
 const port = Number(process.env.PORT ?? 3000);
-const { db, queue, versionDeps, redisUrl } = createServices();
-
-// No offline queue: a PING while Redis is down fails at once instead of hanging the health check.
-const redis = new Redis(redisUrl, { enableOfflineQueue: false, connectTimeout: 2000 });
-redis.on("error", (err: NodeJS.ErrnoException) => console.error("redis error", err.code ?? err.message));
+// The queue's connection has no offline queue, so a count while Redis is down fails at once instead of hanging the health check.
+const { db, queue, queueConnection, versionDeps } = createServices();
 
 const server = createApp({
   checks: {
-    db: () => db.$queryRaw`SELECT 1`,
-    redis: () => redis.ping(),
+    db: async () => {
+      const rows = await db.documentVersion.groupBy({ by: ["status"], _count: { _all: true } });
+      return Object.fromEntries(Object.values(VersionStatus).map((s) => [s, rows.find((r) => r.status === s)?._count._all ?? 0]));
+    },
+    redis: () => queue.getJobCounts("waiting", "active"),
   },
   db,
   createVersion: (target, file) => createVersion(versionDeps, target, file),
+  retry: (documentId) => retryDocument({ db, enqueue: versionDeps.enqueue }, documentId),
 }).listen(port, () => console.log(`api listening on :${port}`));
 
 process.on("SIGTERM", () => {
   server.close();
   void db.$disconnect();
-  void queue.close();
-  redis.disconnect();
+  // The queue does not close a connection it was handed.
+  void queue.close().then(() => queueConnection.disconnect());
 });

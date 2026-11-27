@@ -129,6 +129,9 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-claude-opus-5-5}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      # A killed worker's version is resumed about one lease plus one reconcile interval later.
+      LEASE_SECONDS: ${LEASE_SECONDS:-60}
+      RECONCILE_SECONDS: ${RECONCILE_SECONDS:-15}
     depends_on:
       minio-init:
         condition: service_completed_successfully

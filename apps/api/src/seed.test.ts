@@ -5,7 +5,7 @@ import { createDb, type PrismaClient } from "@lomi/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { seed, type ManifestDocument } from "./seed.js";
 
-// Runs against a real Postgres (the compose one): TEST_DATABASE_URL=postgres://lomi:lomi@127.0.0.1:5433/lomi
+// Runs against a dedicated test database (see spec 007): TEST_DATABASE_URL=postgres://lomi:lomi@127.0.0.1:5433/lomi_test
 const url = process.env.TEST_DATABASE_URL;
 const fixturesDir = fileURLToPath(new URL("../../../fixtures/", import.meta.url));
 const sha256 = (file: string) => createHash("sha256").update(readFileSync(`${fixturesDir}${file}`)).digest("hex");

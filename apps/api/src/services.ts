@@ -10,6 +10,23 @@ export function requireEnv(name: string): string {
   return value;
 }
 
+/**
+ * The extraction queue, with the same job options as the worker's (apps/worker/src/reconciler.ts): finished
+ * jobs must leave Redis, or BullMQ silently ignores re-adding their jobId and a retry never runs.
+ * No offline queue covers Redis going down later; skipWaitingForReady covers starting while Redis is down,
+ * and needs skipVersionCheck, whose INFO call would otherwise fail that first connection for good.
+ */
+export const extractionQueue = (connection: Redis, name = "extraction") =>
+  new Queue(name, {
+    connection,
+    skipWaitingForReady: true,
+    skipVersionCheck: true,
+    defaultJobOptions: { removeOnComplete: true, removeOnFail: true, attempts: 1 },
+  });
+
+/** jobId = versionId makes a repeated enqueue of a waiting or active version a no-op. */
+export const enqueueTo = (queue: Queue) => async (versionId: string) => void (await queue.add("extract", { versionId }, { jobId: versionId }));
+
 /** The database, object storage and queue that `createVersion` writes to, configured from the environment. */
 export function createServices() {
   const redisUrl = requireEnv("REDIS_URL");
@@ -25,11 +42,9 @@ export function createServices() {
   });
 
   // Fail fast: with Redis down, queue.add rejects at once (the upload still succeeds and the row stays
-  // queued) instead of hanging the request until Redis is back. No offline queue covers Redis going down
-  // later; skipWaitingForReady covers the api starting while Redis is down, and needs skipVersionCheck,
-  // whose INFO call would otherwise fail that first connection for good.
+  // queued) instead of hanging the request until Redis is back.
   const queueConnection = new Redis(redisUrl, { enableOfflineQueue: false });
-  const queue = new Queue("extraction", { connection: queueConnection, skipWaitingForReady: true, skipVersionCheck: true });
+  const queue = extractionQueue(queueConnection);
   queue.on("error", (err: NodeJS.ErrnoException) => console.error("queue error", err.code ?? err.message));
 
   const versionDeps: CreateVersionDeps = {
@@ -37,9 +52,8 @@ export function createServices() {
       await s3.send(new PutObjectCommand({ Bucket: s3Bucket, Key: key, Body: body, ContentType: contentType }));
     },
     db,
-    // jobId = versionId makes a repeated enqueue of the same version a no-op.
-    enqueue: async (versionId) => void (await queue.add("extract", { versionId }, { jobId: versionId })),
+    enqueue: enqueueTo(queue),
   };
 
-  return { db, queue, queueConnection, versionDeps, redisUrl };
+  return { db, queue, queueConnection, versionDeps };
 }
