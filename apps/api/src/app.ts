@@ -1,7 +1,10 @@
+import type { ExpectedFields } from "@lomi/core";
 import { DocumentType, type PrismaClient } from "@lomi/db";
 import express, { type Express } from "express";
+import { z } from "zod";
 import { StorageUnavailableError, type CreateVersionResult, type VersionTarget } from "./create-version.js";
 import type { RetryResult } from "./retry.js";
+import { documentProgress, documentView, ReviewInputSchema, reviewValue } from "./review.js";
 
 /** Each check returns counts, so a successful count is also the service's health check. */
 export interface HealthChecks {
@@ -13,7 +16,9 @@ export interface HealthChecks {
 
 export interface AppDeps {
   checks: HealthChecks;
-  db: Pick<PrismaClient, "document">;
+  db: PrismaClient;
+  /** Expected fields per document type: their order is the values' order within a review group. */
+  fields: ExpectedFields;
   createVersion: (target: VersionTarget, file: File) => Promise<CreateVersionResult>;
   retry: (documentId: string) => Promise<RetryResult>;
 }
@@ -24,7 +29,7 @@ const MAX_BODY_BYTES = MAX_PDF_BYTES + 64 * 1024;
 const TOO_LARGE = "file must be at most 10 MB";
 const documentTypes: readonly string[] = Object.values(DocumentType);
 
-export function createApp({ checks, db, createVersion, retry }: AppDeps): Express {
+export function createApp({ checks, db, fields, createVersion, retry }: AppDeps): Express {
   const app = express();
 
   app.get("/health", async (_req, res) => {
@@ -95,21 +100,33 @@ export function createApp({ checks, db, createVersion, retry }: AppDeps): Expres
   });
 
   app.get("/documents/:id", async (req, res) => {
-    const doc = await db.document.findUnique({
-      where: { id: req.params.id },
-      select: {
-        id: true,
-        title: true,
-        type: true,
-        createdAt: true,
-        currentVersion: {
-          select: { id: true, versionNo: true, status: true, error: true, attempts: true, createdAt: true },
-        },
-      },
-    });
-    if (!doc) return void res.status(404).json({ error: "document not found" });
-    // Values arrive with extraction (spec 003) and the review API (spec 004).
-    res.json({ ...doc, values: [] });
+    const view = await documentView(db, fields, req.params.id);
+    if (!view) return void res.status(404).json({ error: "document not found" });
+    res.json(view);
+  });
+
+  app.get("/documents/:id/versions/:n", async (req, res) => {
+    // At most 9 digits, so it fits the int column.
+    const view = /^[1-9]\d{0,8}$/.test(req.params.n) ? await documentView(db, fields, req.params.id, Number(req.params.n)) : null;
+    if (!view) return void res.status(404).json({ error: "document version not found" });
+    res.json(view);
+  });
+
+  app.get("/documents/:id/progress", async (req, res) => {
+    const progress = await documentProgress(db, req.params.id);
+    if (!progress) return void res.status(404).json({ error: "document not found" });
+    res.json(progress);
+  });
+
+  app.post("/values/:id/review", express.json(), async (req, res) => {
+    // Value ids are uuids; anything else could never match, and would fail the query's cast.
+    if (!z.guid().safeParse(req.params.id).success) return void res.status(404).json({ error: "value not found" });
+    const input = ReviewInputSchema.safeParse(req.body);
+    if (!input.success) return void res.status(400).json({ error: "invalid review", issues: input.error.issues });
+    const result = await reviewValue(db, req.params.id, input.data);
+    if (result === "not_found") return void res.status(404).json({ error: "value not found" });
+    if ("staleVersion" in result) return void res.status(409).json({ error: "stale_version", currentVersionNo: result.staleVersion });
+    res.json(result);
   });
 
   app.post("/documents/:id/retry", async (req, res) => {

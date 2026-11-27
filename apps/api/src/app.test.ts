@@ -28,7 +28,10 @@ const baseDeps: AppDeps = {
       // Shaped like the route's select, as Prisma would return it.
       findMany: async () => [{ id: DOC_ID, title: "march.pdf", type: "invoice", currentVersion: { versionNo: 1, status: "queued" } }],
     },
+    extractedValue: { findMany: async () => [] },
+    $transaction: fail,
   } as unknown as AppDeps["db"],
+  fields: { invoice: [] },
   createVersion: async () => ({ documentId: DOC_ID, versionId: "ver-1", status: "queued" }),
   retry: async () => ({ versionId: "ver-1" }),
 };
@@ -116,7 +119,8 @@ describe("POST /documents", () => {
 });
 
 describe("GET /documents/:id", () => {
-  it("returns the document, its current version and no values", async () => {
+  it("returns the document, its current version and that version's values", async () => {
+    const currentVersion = { id: "ver-1", versionNo: 1, status: "queued", error: null, attempts: 0, createdAt: "2026-11-27T10:00:00.000Z" };
     expect(await request(`/documents/${DOC_ID}`)).toEqual({
       status: 200,
       body: {
@@ -124,7 +128,8 @@ describe("GET /documents/:id", () => {
         title: "march.pdf",
         type: "invoice",
         createdAt: "2026-11-27T10:00:00.000Z",
-        currentVersion: { id: "ver-1", versionNo: 1, status: "queued", error: null, attempts: 0, createdAt: "2026-11-27T10:00:00.000Z" },
+        currentVersion,
+        version: currentVersion,
         values: [],
       },
     });
@@ -133,6 +138,32 @@ describe("GET /documents/:id", () => {
   it("returns 404 for an unknown id", async () => {
     expect((await request("/documents/00000000-0000-4000-8000-000000000000")).status).toBe(404);
     expect((await request("/documents/doc-missing-001")).status).toBe(404);
+  });
+});
+
+describe("POST /values/:id/review", () => {
+  const VALUE_ID = "3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f";
+  const post = (body: string, contentType = "application/json") =>
+    request(`/values/${VALUE_ID}/review`, { method: "POST", headers: { "content-type": contentType }, body });
+
+  it("rejects an invalid body with 400 before touching the database", async () => {
+    const cases = [
+      { action: "correct" }, // no correctedValue
+      { action: "correct", correctedValue: "   " }, // blank after trimming
+      { action: "correct", correctedValue: 5230.29 },
+      { action: "approve", correctedValue: "x" }, // approve carries no correction
+      { action: "approve", note: "x".repeat(1001) },
+      { action: "reject" },
+      {},
+    ];
+    for (const body of cases) expect((await post(JSON.stringify(body))).status, JSON.stringify(body)).toBe(400);
+    expect((await post("{not json")).status).toBe(400);
+    expect((await post("action=approve", "application/x-www-form-urlencoded")).status).toBe(400);
+  });
+
+  it("accepts a note of exactly 1000 characters", async () => {
+    // The fake database fails the transaction: getting past validation is what is checked here.
+    expect((await post(JSON.stringify({ action: "approve", note: "x".repeat(1000) }))).status).toBe(500);
   });
 });
 
