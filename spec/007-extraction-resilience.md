@@ -1,6 +1,6 @@
 # 007 Extraction resilience
 
-Status: Done (verified 2026-11-27, not yet committed; design given by the user)
+Status: Done (verified 2026-11-27, in review on branch `extraction-resilience`; design given by the user)
 Depends on: 003
 
 ## Goal

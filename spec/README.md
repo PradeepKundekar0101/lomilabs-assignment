@@ -21,6 +21,7 @@ Every feature starts as a numbered spec in this folder, and code follows the spe
 | 004 | [Review API](004-review-api.md) | Draft |
 | 005 | [New versions and carry-over](005-new-versions-and-carry-over.md) | Draft |
 | 006 | [Seed the fixture documents](006-seed-fixtures.md) | Done (merged in [PR #2](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/2)) |
+| 007 | [Extraction resilience](007-extraction-resilience.md) | Done (in review on branch `extraction-resilience`) |
 
 ## Template
 
