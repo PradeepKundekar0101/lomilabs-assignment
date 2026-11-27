@@ -27,6 +27,7 @@ A Postgres schema for documents, their versions, extraction attempts, extracted 
 
 - Prisma 7.10.1 (the user switched from Drizzle). Table and column names are snake_case via `@@map` / `@map`.
 - IDs default to `gen_random_uuid()` in the database, so raw SQL inserts work too.
+  Spec 006 changed `documents.id` to `text` (still defaulting to a uuid) so seeded documents keep the fixture manifest's ids.
 - `documents.current_version_id` is UNIQUE: Prisma needs that for a 1:1 relation, and a version is current for at most one document.
 - `extraction_runs.outcome` is nullable while an attempt is still running.
 - Foreign keys use Prisma defaults: `ON DELETE RESTRICT` for required relations, `SET NULL` for optional ones.

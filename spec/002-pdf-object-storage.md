@@ -23,7 +23,7 @@ Clients can list documents and read one document with its current version, witho
    3. In one transaction: insert the document (when `documentId` is null), insert the version (`status = queued`, `storage_key`, `sha256`, `size_bytes`, `mime_type`), and set `documents.current_version_id`.
    4. Enqueue BullMQ job `extract` on queue `extraction` with data `{versionId}` and `jobId = versionId`. If enqueue fails, log it and still succeed; the row stays `queued` for the reconciler (003).
 6. A successful upload responds `202 {id, versionId, status: "queued"}` without waiting for extraction.
-7. `GET /documents/:id` returns the document, its current version (`id`, `versionNo`, `status`, `error`, `attempts`, `createdAt`) and `values: []`. `404` when the document does not exist (including ids that are not UUIDs).
+7. `GET /documents/:id` returns the document, its current version (`id`, `versionNo`, `status`, `error`, `attempts`, `createdAt`) and `values: []`. `404` when the document does not exist.
 8. `GET /documents` returns a list of `{id, title, type, versionNo, status}` from each document's current version, newest first.
 9. No endpoint returns PDF bytes.
 

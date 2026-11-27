@@ -52,7 +52,8 @@ enum ReviewAction {
 }
 
 model Document {
-  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // Text, so seeded documents keep the fixture manifest's ids (doc-invoice-001); uploads get a uuid.
+  id               String            @id @default(dbgenerated("(gen_random_uuid())::text"))
   type             DocumentType
   title            String
   createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -66,7 +67,7 @@ model Document {
 
 model DocumentVersion {
   id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  documentId String        @map("document_id") @db.Uuid
+  documentId String        @map("document_id")
   document   Document      @relation("DocumentVersions", fields: [documentId], references: [id])
   versionNo  Int           @map("version_no")
   // PDF bytes live in object storage at storage_key (pdfs/<sha256>.pdf), never in Postgres.

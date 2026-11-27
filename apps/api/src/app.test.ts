@@ -121,9 +121,9 @@ describe("GET /documents/:id", () => {
     });
   });
 
-  it("returns 404 for a missing or malformed id", async () => {
+  it("returns 404 for an unknown id", async () => {
     expect((await request("/documents/00000000-0000-4000-8000-000000000000")).status).toBe(404);
-    expect((await request("/documents/not-a-uuid")).status).toBe(404);
+    expect((await request("/documents/doc-missing-001")).status).toBe(404);
   });
 });
 

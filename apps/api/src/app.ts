@@ -17,7 +17,6 @@ const MAX_PDF_BYTES = 10 * 1024 * 1024;
 // Room for the multipart boundaries, part headers and the type field around a maximum-size file.
 const MAX_BODY_BYTES = MAX_PDF_BYTES + 64 * 1024;
 const TOO_LARGE = "file must be at most 10 MB";
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const documentTypes: readonly string[] = Object.values(DocumentType);
 
 export function createApp({ checks, db, createVersion }: AppDeps): Express {
@@ -89,21 +88,18 @@ export function createApp({ checks, db, createVersion }: AppDeps): Express {
   });
 
   app.get("/documents/:id", async (req, res) => {
-    // A malformed id cannot exist; checking here also keeps Postgres from rejecting it as a uuid.
-    const doc = UUID.test(req.params.id)
-      ? await db.document.findUnique({
-          where: { id: req.params.id },
-          select: {
-            id: true,
-            title: true,
-            type: true,
-            createdAt: true,
-            currentVersion: {
-              select: { id: true, versionNo: true, status: true, error: true, attempts: true, createdAt: true },
-            },
-          },
-        })
-      : null;
+    const doc = await db.document.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        createdAt: true,
+        currentVersion: {
+          select: { id: true, versionNo: true, status: true, error: true, attempts: true, createdAt: true },
+        },
+      },
+    });
     if (!doc) return void res.status(404).json({ error: "document not found" });
     // Values arrive with extraction (spec 003) and the review API (spec 004).
     res.json({ ...doc, values: [] });

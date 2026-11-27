@@ -55,7 +55,7 @@ export async function processVersion(deps: ExtractDeps, versionId: string): Prom
   };
   const isCurrent = async (tx: Pick<PrismaClient, "$queryRaw"> = db) => {
     const [doc] = await tx.$queryRaw<{ current_version_id: string | null }[]>`
-      SELECT current_version_id FROM documents WHERE id = ${version.document_id}::uuid FOR UPDATE`;
+      SELECT current_version_id FROM documents WHERE id = ${version.document_id} FOR UPDATE`;
     return doc?.current_version_id === versionId;
   };
 
