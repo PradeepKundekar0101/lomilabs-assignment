@@ -2,7 +2,7 @@ import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
 import { createApp, type AppDeps } from "./app.js";
-import { StorageUnavailableError } from "./create-version.js";
+import { StorageUnavailableError, VersionRejectedError } from "./create-version.js";
 
 const fail = async () => {
   throw new Error("down");
@@ -32,7 +32,7 @@ const baseDeps: AppDeps = {
     $transaction: fail,
   } as unknown as AppDeps["db"],
   fields: { invoice: [] },
-  createVersion: async () => ({ documentId: DOC_ID, versionId: "ver-1", status: "queued" }),
+  createVersion: async () => ({ documentId: DOC_ID, versionId: "ver-1", versionNo: 1, status: "queued" }),
   retry: async () => ({ versionId: "ver-1" }),
 };
 
@@ -80,7 +80,7 @@ describe("POST /documents", () => {
 
   it("returns 202 with the queued version and passes the file to createVersion", async () => {
     const r = await upload(form("lease", pdf()));
-    expect(r).toMatchObject({ status: 202, body: { id: DOC_ID, versionId: "ver-1", status: "queued" } });
+    expect(r).toEqual({ status: 202, body: { id: DOC_ID, versionId: "ver-1", versionNo: 1, status: "queued" }, calls: r.calls });
     const [target, file] = r.calls[0]!;
     expect({ target, name: file.name }).toEqual({ target: { type: "lease", title: "march.pdf" }, name: "march.pdf" });
   });
@@ -115,6 +115,54 @@ describe("POST /documents", () => {
 
   it("returns 500 for any other failure", async () => {
     expect((await upload(form("invoice", pdf()), fail as AppDeps["createVersion"])).status).toBe(500);
+  });
+});
+
+describe("POST /documents/:id/versions", () => {
+  const pdf = (size = 0) => new File(["%PDF-1.7 ", new Uint8Array(size)], "march-v2.pdf", { type: "application/pdf" });
+  function form(file: File | null) {
+    const body = new FormData();
+    if (file) body.append("file", file);
+    return body;
+  }
+
+  async function uploadVersion(body: FormData | string, createVersion: AppDeps["createVersion"] = baseDeps.createVersion) {
+    const calls: Parameters<AppDeps["createVersion"]>[] = [];
+    const res = await request(`/documents/${DOC_ID}/versions`, { method: "POST", body }, { createVersion: async (...args) => (calls.push(args), createVersion(...args)) });
+    return { ...res, calls };
+  }
+  const rejected = (reason: VersionRejectedError["reason"]) => async () => {
+    throw new VersionRejectedError(reason);
+  };
+
+  it("returns 202 with the new version's number and passes the document id to createVersion", async () => {
+    const r = await uploadVersion(form(pdf()), async () => ({ documentId: DOC_ID, versionId: "ver-2", versionNo: 2, status: "queued" }));
+    expect(r.status).toBe(202);
+    expect(r.body).toEqual({ id: DOC_ID, versionId: "ver-2", versionNo: 2, status: "queued" });
+    const [target, file] = r.calls[0]!;
+    expect({ target, name: file.name }).toEqual({ target: { documentId: DOC_ID }, name: "march-v2.pdf" });
+  });
+
+  it("rejects invalid files with 400 before calling createVersion, as the upload does", async () => {
+    for (const body of [form(new File(["hello"], "notes.pdf")), form(null), form(pdf(10 * 1024 * 1024)), form(pdf(11 * 1024 * 1024))]) {
+      const r = await uploadVersion(body);
+      expect(r.status).toBe(400);
+      expect(r.calls).toEqual([]);
+    }
+    const r = await request(`/documents/${DOC_ID}/versions`, { method: "POST", headers: { "content-type": "application/pdf" }, body: "%PDF-1.7" });
+    expect(r.status).toBe(415);
+  });
+
+  it("returns 404 for an unknown document and 409 for the same bytes as the current version", async () => {
+    expect(await uploadVersion(form(pdf()), rejected("document_not_found"))).toMatchObject({ status: 404, body: { error: "document not found" } });
+    expect(await uploadVersion(form(pdf()), rejected("identical_to_current"))).toMatchObject({ status: 409, body: { error: "identical_to_current" } });
+  });
+
+  it("returns 503 when object storage is down", async () => {
+    const r = await uploadVersion(form(pdf()), async () => {
+      throw new StorageUnavailableError(new Error("ECONNREFUSED"));
+    });
+    expect(r.status).toBe(503);
   });
 });
 

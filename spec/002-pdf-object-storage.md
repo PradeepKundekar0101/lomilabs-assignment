@@ -38,6 +38,7 @@ Clients can list documents and read one document with its current version, witho
   - `skipVersionCheck: true` is required with the previous option, because the version check's `INFO` would fail that first connection permanently.
 - `createVersion` with a `{documentId}` target gives the next `version_no`, marks the previous current version `superseded`, and moves `current_version_id`.
   No route calls it yet; spec 005 adds `POST /documents/:id/versions`, the retry for the concurrent-upload race on `(document_id, version_no)`, and carry-over.
+  Spec 005 changed this: the previous version keeps its status, the document lock replaces the retry, and the response carries `versionNo`.
 - `values` is always `[]` until extraction (003) and the review API (004) exist; 004 fills it.
 - Content addressed keys: re-uploading identical bytes rewrites the same object.
 - MinIO via Chainguard images pinned by digest (Docker Hub and quay no longer serve MinIO). Dev only: the MinIO root user doubles as the app's S3 credentials (`lomi` / `lomisecret` by default).

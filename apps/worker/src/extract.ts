@@ -1,5 +1,6 @@
 import {
   buildPrompt,
+  carryOver,
   ExtractionError,
   extractPdfText,
   parseLlmOutput,
@@ -27,6 +28,7 @@ export type ExtractOutcome = "not_claimable" | "superseded" | "extracted" | "fai
 interface ClaimedVersion {
   id: string;
   document_id: string;
+  version_no: number;
   storage_key: string;
   attempts: number;
 }
@@ -43,7 +45,7 @@ export async function processVersion(deps: ExtractDeps, versionId: string): Prom
         attempts = attempts + 1, error = null, updated_at = now()
     WHERE id = ${versionId}::uuid AND attempts < ${MAX_ATTEMPTS}
       AND (status = 'queued' OR (status = 'extracting' AND lease_until < now()))
-    RETURNING id, document_id, storage_key, attempts`;
+    RETURNING id, document_id, version_no, storage_key, attempts`;
   if (!version) {
     // Claimable but out of attempts: every earlier attempt died mid-way (e.g. a PDF that crashes the worker).
     const gaveUp = await db.$executeRaw`
@@ -101,11 +103,38 @@ export async function processVersion(deps: ExtractDeps, versionId: string): Prom
     // 6. Commit, unless a newer version became current meanwhile (the row lock orders us with the upload).
     return await db.$transaction(async (tx) => {
       if (!(await isCurrent(tx))) return supersede(tx);
-      await tx.extractedValue.createMany({
-        data: values.map((v) => ({ ...v, versionId, reviewStatus: "pending" as const })),
-        skipDuplicates: true, // ON CONFLICT (version_id, field_key) DO NOTHING
+      // Carry-over (spec 005) from the latest earlier extracted version. Reviews take the document lock that
+      // isCurrent holds, so every review of the base version committed before now is included.
+      const base = await tx.documentVersion.findFirst({
+        where: { documentId: version.document_id, status: "extracted", versionNo: { lt: version.version_no } },
+        orderBy: { versionNo: "desc" },
+        select: {
+          values: {
+            select: {
+              id: true,
+              fieldKey: true,
+              value: true,
+              evidence: true,
+              reviews: { select: { id: true, action: true, correctedValue: true, note: true }, orderBy: { createdAt: "desc" }, take: 1 },
+            },
+          },
+        },
       });
-      // HOOK: carry-over from previous extracted version goes here (step 10, spec 005)
+      const baseValues = base?.values.map(({ reviews: [latestReview], ...v }) => ({ ...v, latestReview: latestReview ?? null })) ?? [];
+      const links = carryOver(baseValues, values, parsedText);
+      const created = await tx.extractedValue.createManyAndReturn({
+        data: values.map((v, i) => ({ ...v, versionId, reviewStatus: links[i]!.reviewStatus, previousValueId: links[i]!.previousValueId })),
+        skipDuplicates: true, // ON CONFLICT (version_id, field_key) DO NOTHING
+        select: { id: true, fieldKey: true },
+      });
+      // Only for values this attempt inserted: a reclaimed attempt that committed first carried its own.
+      const createdIds = new Map(created.map((v) => [v.fieldKey, v.id]));
+      await tx.review.createMany({
+        data: links.flatMap(({ carriedReview }, i) => {
+          const valueId = createdIds.get(values[i]!.fieldKey);
+          return carriedReview && valueId ? [{ ...carriedReview, valueId }] : [];
+        }),
+      });
       await tx.documentVersion.update({ where: { id: versionId }, data: { status: "extracted", leaseUntil: null } });
       await tx.extractionRun.update({
         where: { id: run.id },

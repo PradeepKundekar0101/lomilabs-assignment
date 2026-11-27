@@ -54,14 +54,15 @@ describe.skipIf(!url)("processVersion against Postgres", () => {
     return { documentId: doc.id, versionId: version.id };
   }
 
-  /** What the api's createVersion does for a new version of an existing document. */
-  async function uploadNextVersion(documentId: string, previousId: string) {
-    await db.$transaction(async (tx) => {
+  /** What the api's createVersion does for a new version of an existing document: the previous one keeps its status. */
+  async function uploadNextVersion(documentId: string) {
+    return db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM documents WHERE id = ${documentId} FOR UPDATE`;
       const next = await tx.documentVersion.create({
         data: { documentId, versionNo: 2, storageKey: "pdfs/test2.pdf", sha256: "test2", sizeBytes: 1, mimeType: "application/pdf" },
       });
-      await tx.documentVersion.update({ where: { id: previousId }, data: { status: "superseded" } });
       await tx.document.update({ where: { id: documentId }, data: { currentVersionId: next.id } });
+      return next.id;
     });
   }
 
@@ -77,6 +78,7 @@ describe.skipIf(!url)("processVersion against Postgres", () => {
 
   afterAll(async () => {
     const inDocs = { version: { documentId: { in: documentIds } } };
+    await db.review.deleteMany({ where: { value: inDocs } });
     await db.extractedValue.deleteMany({ where: inDocs });
     await db.extractionRun.deleteMany({ where: inDocs });
     await db.document.updateMany({ where: { id: { in: documentIds } }, data: { currentVersionId: null } });
@@ -135,6 +137,29 @@ describe.skipIf(!url)("processVersion against Postgres", () => {
     ]);
   });
 
+  it("carries each review once when a reclaimed attempt commits a new version first", async () => {
+    const { documentId, versionId: v1 } = await seedInvoice();
+    expect(await processVersion(deps(), v1)).toBe("extracted");
+    for (const { id } of await db.extractedValue.findMany({ where: { versionId: v1 } })) {
+      await db.review.create({ data: { valueId: id, action: "approve" } });
+    }
+    const v2 = await uploadNextVersion(documentId);
+    const slow = fakeLlm(invoiceAnswer, async () => {
+      await db.$executeRaw`UPDATE document_versions SET lease_until = now() - interval '1 second' WHERE id = ${v2}::uuid`;
+      expect(await processVersion(deps(), v2)).toBe("extracted");
+    });
+    expect(await processVersion(deps({ llm: slow }), v2)).toBe("extracted");
+
+    const values = await db.extractedValue.findMany({ where: { versionId: v2 }, include: { reviews: true } });
+    expect(values).toHaveLength(5);
+    for (const v of values) {
+      expect(v.reviewStatus).toBe("carried_over");
+      expect(v.previousValueId).not.toBeNull();
+      expect(v.reviews).toHaveLength(1);
+    }
+    expect((await db.documentVersion.findUniqueOrThrow({ where: { id: v1 } })).status).toBe("extracted");
+  });
+
   it("records an LLM failure on the version and the run, without throwing", async () => {
     const { versionId } = await seedInvoice();
     const llm: Llm = async () => {
@@ -153,7 +178,7 @@ describe.skipIf(!url)("processVersion against Postgres", () => {
 
   it("writes no values when a new version is uploaded while the model runs", async () => {
     const { documentId, versionId } = await seedInvoice();
-    const llm = fakeLlm(invoiceAnswer, () => uploadNextVersion(documentId, versionId));
+    const llm = fakeLlm(invoiceAnswer, async () => void (await uploadNextVersion(documentId)));
     expect(await processVersion(deps({ llm }), versionId)).toBe("superseded");
 
     const { version, values, runs } = await state(versionId);
@@ -166,7 +191,7 @@ describe.skipIf(!url)("processVersion against Postgres", () => {
   it("skips the model when a new version is uploaded before the call", async () => {
     const { documentId, versionId } = await seedInvoice();
     const llm = fakeLlm();
-    const getObject = async () => (await uploadNextVersion(documentId, versionId), invoicePdf);
+    const getObject = async () => (await uploadNextVersion(documentId), invoicePdf);
     expect(await processVersion(deps({ llm, getObject }), versionId)).toBe("superseded");
 
     const { version, values, runs } = await state(versionId);

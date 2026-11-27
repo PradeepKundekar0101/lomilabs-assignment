@@ -1,6 +1,6 @@
 # 004 Review API
 
-Status: Done (revision 2, from the user's requirements on 2026-11-27; in review on branch `review-api`)
+Status: Done (revision 2, from the user's requirements on 2026-11-27; merged in PR #5)
 Depends on: 001, 003, 007
 
 ## Goal
