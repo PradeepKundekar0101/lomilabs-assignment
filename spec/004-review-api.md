@@ -10,6 +10,7 @@ Humans can see a document's extracted values with their evidence, and approve or
 ## Requirements
 
 1. `GET /documents/:id` returns the document, its current version (status, attempts, error) and that version's values.
+   The endpoint already exists from 002 revision 2 with `values: []`; this spec fills `values`.
 2. Each value includes `value`, `evidence`, offsets, `gap_reason`, `review_status`, and an **effective value**: the `corrected_value` of the latest `correct` review if there is one, else `value`.
 3. `POST /values/:id/reviews` with `{action, correctedValue?, note?}`:
    - `approve` must not carry `correctedValue`.
