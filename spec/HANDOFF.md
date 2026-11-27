@@ -18,15 +18,16 @@ Monorepo: pnpm 12 workspaces + turbo, TypeScript 7, Node 26, vitest, oxlint.
 |------|------|
 | `apps/api` | Express 5 API. `POST /documents` (multipart upload), `POST /documents/:id/versions` (a new version of a document), `GET /documents`, `GET /documents/:id` (with the current version's values), `GET /documents/:id/versions/:n`, `GET /documents/:id/progress`, `POST /documents/:id/retry`, `POST /values/:id/review`, `GET /health` (with version and queue counts). Also the seed (`src/seed.ts`). |
 | `apps/worker` | BullMQ worker on queue `extraction`: claim with a heartbeat-renewed lease, parse, LLM, evidence check, commit (`src/extract.ts`); a reconciler re-enqueues from Postgres whatever Redis lost (`src/reconciler.ts`). |
-| `apps/web` | Vite + React. Shows `/health` only. Served by nginx, which proxies `/health` to the api. |
+| `apps/web` | The review UI (spec 008): Vite, React, TanStack Query, React Router, Tailwind v4, shadcn/ui. `/` lists documents, `/documents/:id` reviews one. Served by nginx, which proxies `/api/*` to the api with the prefix stripped. See `apps/web/README.md`. |
 | `packages/db` | Prisma 7 schema, migrations, `createDb()` client. |
+| `packages/shared` | Zod schemas of the API's responses and the review input, used by the api and parsed by the web app (spec 008). |
 | `packages/core` | Pure extraction logic: `extractPdfText` (unpdf), `buildPrompt`, `createLlm`, `parseLlmOutput`, `validateEvidence`. |
 | `fixtures/` | Copied from the assignment repo: sample PDFs, `documents.json` manifest, `expected-fields.json`. |
 | `docker-compose.yml` | postgres, redis, minio, minio-init, migrate-seed (migrations, then the fixture seed, from the api image), api, worker, web. |
 | `scripts/chaos.sh` | Kills the worker and flushes Redis mid-extraction against the running stack, then checks everything settles. |
 | `spec/` | Specs for spec-driven development. See `spec/README.md`. |
 
-The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, `packages/shared`) was deleted with spec 003.
+The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the old `packages/shared`) was deleted with spec 003; spec 008 recreated `packages/shared` for the API's schemas.
 
 ## Git state
 
@@ -39,7 +40,9 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, `pack
 - The `extraction-resilience` branch is fully merged; do not add to it.
 - PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/5 (spec 004, built in the worktree `../lomilabs-assignment-review-api`) was merged into `main` on 2026-11-27 as `cdcef46`.
 - The `review-api` branch is fully merged; do not add to it.
-- Branch `new-versions` (off `review-api`, all of which `main` now has) holds spec 005 revision 2, open for review as a PR.
+- PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/6 (spec 005) was merged into `main` on 2026-11-27 as `30ca9f1`.
+- The `new-versions` branch is fully merged; do not add to it.
+- Branch `review-ui` (off `main` at `30ca9f1`) holds spec 008.
 - New work: branch off `main` and open a PR.
 - Commits must be authored as `pradeepkundekar0101 <91021094+PradeepKundekar0101@users.noreply.github.com>`. The repo-local git config sets this; the machine's global identity is a different account.
 - The repo has no CI. Verification is local only.
@@ -52,9 +55,10 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, `pack
 | 002 PDF object storage, upload and document reads | Revision 1 merged (PR #1). Revision 2 done and verified in docker, merged (PR #2). |
 | 003 Extraction worker (happy path) | Done and verified in docker with the real model, merged (PR #2). |
 | 004 Review API | Revision 2 done and verified (integration tests, E2E in docker with the rebuilt api image), merged (PR #5). |
-| 005 New versions and carry-over | Revision 2 done and verified (unit, integration against Postgres, E2E in docker with the real model), in review on branch `new-versions`. |
+| 005 New versions and carry-over | Revision 2 done and verified (unit, integration against Postgres, E2E in docker with the real model), merged (PR #6). |
 | 006 Seed the fixture documents | Done and verified in docker (`down -v`, `up`, `restart`), merged (PR #2). |
 | 007 Extraction resilience (lease heartbeat, reconciler, attempt cap, retry, health counts) | Done and verified (integration tests, `scripts/chaos.sh`, retry and Redis-down checks in docker), merged (PR #4). |
+| 008 Review UI | Done and verified (component tests with MSW, api integration, E2E in docker through nginx), in review as a PR on branch `review-ui`. |
 
 Draft specs contain assumptions and open questions; confirm them with the user before implementing.
 
@@ -82,6 +86,8 @@ On a fresh stack, `migrate-seed` seeds `doc-invoice-001`, `doc-lease-001` and `d
 The stack was last rebuilt from empty volumes on 2026-11-27; after the spec 007 chaos and retry checks it runs with 11 documents, all `extracted`.
 The api and worker images were rebuilt from the `new-versions` branch on 2026-11-27 (`docker compose build api worker`, then `up -d --no-deps --force-recreate api worker`; plain `up --build` kept old containers before). The build took about 13 minutes, mostly npm downloads.
 The spec 004 E2E left reviews on two non-fixture documents, `c7dfe635…` and `d5c9a499…`. The spec 005 E2E reviewed `doc-invoice-001` version 1 and uploaded version 2, which is now current with 2 pending and 3 carried-over values; the other two seeded documents have no reviews.
+The api and web images were rebuilt from the `review-ui` branch on 2026-11-27.
+The spec 008 E2E reviewed the non-fixture lease `7e2309bf…` (2 approves, 1 correction) and uploaded `broken-e2e.pdf` (`5e3ee4ab…`, two versions, both `failed` on purpose); `doc-invoice-001` was only viewed.
 The api service has no healthcheck, so `docker compose up --wait` returns before it listens; give it a second before the first request.
 
 ## Gotchas found so far (read these, they cost time)
@@ -111,6 +117,9 @@ The api service has no healthcheck, so `docker compose up --wait` returns before
 23. **The api needs `EXPECTED_FIELDS_PATH`** (for the values' sort order), like the worker; both Dockerfiles set it.
 24. **An upload no longer supersedes the previous version** (spec 005). The worker supersedes a version that is not current when it reaches its currency checks, and an extracted version stays `extracted` as the base for carry-over. Do not add superseding back to `createVersion`.
 25. **The api's tests import the worker.** `apps/api/src/carry-over.test.ts` drives `processVersion` through `@lomi/worker/extract` (a dev dependency), so turbo builds the worker before the api's typecheck and tests.
+26. **The web app calls the api under `/api`.** `/documents/:id` is both a page and an api route, so nginx (and the Vite dev server) proxy `/api/*` to the api with the prefix stripped; nginx also raises `client_max_body_size` to the api's 11 MB upload cap (its default is 1 MB).
+27. **shadcn's components import `cn` from the `cn` package** (shadcn-ui/cn), not `clsx` + `tailwind-merge`, and `index.css` imports `shadcn/tailwind.css`, so `shadcn` is a runtime dependency. Do not edit `src/components/ui` except theme tokens; oxlint's `only-export-components` is off there.
+28. **MSW 3 renamed `onUnhandledRequest` to `onUnhandledFrame`.** The web tests stub `scrollIntoView`, `ResizeObserver` and `matchMedia` for jsdom in `src/test/setup.ts`.
 
 ## User preferences (from the user's global instructions)
 
