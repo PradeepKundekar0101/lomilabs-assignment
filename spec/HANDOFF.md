@@ -58,7 +58,7 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the o
 | 005 New versions and carry-over | Revision 2 done and verified (unit, integration against Postgres, E2E in docker with the real model), merged (PR #6). |
 | 006 Seed the fixture documents | Done and verified in docker (`down -v`, `up`, `restart`), merged (PR #2). |
 | 007 Extraction resilience (lease heartbeat, reconciler, attempt cap, retry, health counts) | Done and verified (integration tests, `scripts/chaos.sh`, retry and Redis-down checks in docker), merged (PR #4). |
-| 008 Review UI | Done and verified (component tests with MSW, api integration, E2E in docker through nginx), in review as a PR on branch `review-ui`. |
+| 008 Review UI | Revision 2 (the Lomi Labs design system) done and verified (component tests with MSW, api integration, E2E in docker through nginx), in review as PR #7 on branch `review-ui`. |
 
 Draft specs contain assumptions and open questions; confirm them with the user before implementing.
 
@@ -120,6 +120,7 @@ The api service has no healthcheck, so `docker compose up --wait` returns before
 26. **The web app calls the api under `/api`.** `/documents/:id` is both a page and an api route, so nginx (and the Vite dev server) proxy `/api/*` to the api with the prefix stripped; nginx also raises `client_max_body_size` to the api's 11 MB upload cap (its default is 1 MB).
 27. **shadcn's components import `cn` from the `cn` package** (shadcn-ui/cn), not `clsx` + `tailwind-merge`, and `index.css` imports `shadcn/tailwind.css`, so `shadcn` is a runtime dependency. Do not edit `src/components/ui` except theme tokens; oxlint's `only-export-components` is off there.
 28. **MSW 3 renamed `onUnhandledRequest` to `onUnhandledFrame`.** The web tests stub `scrollIntoView`, `ResizeObserver` and `matchMedia` for jsdom in `src/test/setup.ts`.
+29. **The design system lives in `apps/web/src/index.css`.** It maps the Lomi Labs tokens onto shadcn's: `text-sm` is 15px, `font-medium` is 560, `rounded-lg` (controls) is 4px and `rounded-xl` (cards) 8px, and `headline-lg`/`headline-md` are custom text tokens. shadcn's `cn` does not know the custom tokens, so `cn('text-base', 'text-headline-lg')` keeps both; put the headline tokens on plain elements, not on shadcn components that set their own size.
 
 ## User preferences (from the user's global instructions)
 
