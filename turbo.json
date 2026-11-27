@@ -5,7 +5,8 @@
     "build":     { "dependsOn": ["^build", "generate"], "outputs": ["dist/**"] },
     "typecheck": { "dependsOn": ["^build", "generate"] },
     "lint":      {},
-    "test":      { "dependsOn": ["^build", "generate"], "outputs": [], "env": ["TEST_DATABASE_URL"] },
+    "migrate-test": { "cache": false, "env": ["TEST_DATABASE_URL"] },
+    "test":      { "dependsOn": ["^build", "generate", "^migrate-test"], "outputs": [], "env": ["TEST_DATABASE_URL", "TEST_REDIS_URL"] },
     "dev":       { "cache": false, "persistent": true }
   }
 }
