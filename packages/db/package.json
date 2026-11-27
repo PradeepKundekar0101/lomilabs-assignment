@@ -6,12 +6,22 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "generate": "prisma generate",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "oxlint src"
+    "lint": "oxlint src --ignore-pattern \"src/generated/**\"",
+    "migrate": "prisma migrate deploy"
   },
   "dependencies": {
-    "@lomi/shared": "workspace:*"
-  }
+    "@lomi/shared": "workspace:*",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "prisma": "7.10.1"
+  },
+  "files": [
+    "dist",
+    "prisma",
+    "prisma.config.ts"
+  ]
 }

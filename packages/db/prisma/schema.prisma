@@ -1,0 +1,159 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum DocumentType {
+  invoice
+  lease
+  report
+
+  @@map("document_type")
+}
+
+enum VersionStatus {
+  queued
+  extracting
+  extracted
+  failed
+  superseded
+
+  @@map("version_status")
+}
+
+enum RunOutcome {
+  succeeded
+  failed
+  superseded
+
+  @@map("run_outcome")
+}
+
+enum ReviewStatus {
+  pending
+  approved
+  corrected
+  carried_over
+
+  @@map("review_status")
+}
+
+enum ReviewAction {
+  approve
+  correct
+
+  @@map("review_action")
+}
+
+model Document {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type             DocumentType
+  title            String
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  // Unique because Prisma models this as 1:1; a version is current for at most one document.
+  currentVersionId String?           @unique @map("current_version_id") @db.Uuid
+  currentVersion   DocumentVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  versions         DocumentVersion[] @relation("DocumentVersions")
+
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documentId String        @map("document_id") @db.Uuid
+  document   Document      @relation("DocumentVersions", fields: [documentId], references: [id])
+  versionNo  Int           @map("version_no")
+  // PDF bytes live in object storage at storage_key (pdfs/<sha256>.pdf), never in Postgres.
+  storageKey String        @map("storage_key")
+  sha256     String
+  sizeBytes  Int           @map("size_bytes")
+  mimeType   String        @map("mime_type")
+  parsedText String?       @map("parsed_text")
+  status     VersionStatus @default(queued)
+  attempts   Int           @default(0)
+  leaseUntil DateTime?     @map("lease_until") @db.Timestamptz(6)
+  error      String?
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  currentOf      Document?        @relation("CurrentVersion")
+  extractionRuns ExtractionRun[]
+  values         ExtractedValue[]
+
+  // Leading column also covers the document_id FK.
+  @@unique([documentId, versionNo], map: "document_versions_document_id_version_no_key")
+  @@index([status, leaseUntil], map: "document_versions_status_lease_until_idx")
+  @@map("document_versions")
+}
+
+// Append-only: one row per attempt.
+model ExtractionRun {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  versionId   String          @map("version_id") @db.Uuid
+  version     DocumentVersion @relation(fields: [versionId], references: [id])
+  attempt     Int
+  model       String
+  prompt      String
+  rawResponse String?         @map("raw_response")
+  // Null while the attempt is still running.
+  outcome     RunOutcome?
+  error       String?
+  tokensIn    Int?            @map("tokens_in")
+  tokensOut   Int?            @map("tokens_out")
+  startedAt   DateTime        @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt  DateTime?       @map("finished_at") @db.Timestamptz(6)
+
+  @@index([versionId], map: "extraction_runs_version_id_idx")
+  @@map("extraction_runs")
+}
+
+model ExtractedValue {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  versionId       String           @map("version_id") @db.Uuid
+  version         DocumentVersion  @relation(fields: [versionId], references: [id])
+  fieldKey        String           @map("field_key")
+  // Model output only; human corrections live in Review.correctedValue.
+  value           String?
+  evidence        String?
+  // Offsets into document_versions.parsed_text.
+  evidenceStart   Int?             @map("evidence_start")
+  evidenceEnd     Int?             @map("evidence_end")
+  // Set only when value is null (CHECK constraint added in the migration SQL).
+  gapReason       String?          @map("gap_reason")
+  reviewStatus    ReviewStatus     @default(pending) @map("review_status")
+  previousValueId String?          @map("previous_value_id") @db.Uuid
+  previousValue   ExtractedValue?  @relation("ValueLineage", fields: [previousValueId], references: [id])
+  nextValues      ExtractedValue[] @relation("ValueLineage")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  reviews         Review[]
+
+  // Leading column also covers the version_id FK.
+  @@unique([versionId, fieldKey], map: "extracted_values_version_id_field_key_key")
+  @@index([previousValueId], map: "extracted_values_previous_value_id_idx")
+  @@map("extracted_values")
+}
+
+// Append-only: never update or delete rows.
+model Review {
+  id                  String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  valueId             String         @map("value_id") @db.Uuid
+  value               ExtractedValue @relation(fields: [valueId], references: [id])
+  action              ReviewAction
+  correctedValue      String?        @map("corrected_value")
+  note                String?
+  // Set when a review is copied forward to a new version.
+  carriedFromReviewId String?        @map("carried_from_review_id") @db.Uuid
+  carriedFrom         Review?        @relation("CarriedReviews", fields: [carriedFromReviewId], references: [id])
+  carriedTo           Review[]       @relation("CarriedReviews")
+  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([valueId], map: "reviews_value_id_idx")
+  @@index([carriedFromReviewId], map: "reviews_carried_from_review_id_idx")
+  @@map("reviews")
+}

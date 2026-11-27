@@ -1,0 +1,129 @@
+name: lomi
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lomi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lomi}
+      POSTGRES_DB: ${POSTGRES_DB:-lomi}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Docker Hub and quay stopped serving MinIO images; Chainguard's are maintained. Pinned by digest.
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:f6243be11aaaa2fe654d260558e2b3fcef50135e78a3abfd0db802b13444f059
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      # Dev only: the root user doubles as the app's S3 credentials.
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-lomi}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-lomisecret}
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      # No curl in the image, so speak HTTP over bash's /dev/tcp.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /minio/health/live HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && read -r status <&3 && [[ $$status == *' 200 '* ]]"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio-init:
+    image: cgr.dev/chainguard/minio-client@sha256:11aa4baa385a6de421008f72d5019805475f2aa7d74d65d18b92c54986f36016
+    # The image has no shell; mc reads the alias from MC_HOST_<name>.
+    environment:
+      MC_HOST_local: http://${S3_ACCESS_KEY:-lomi}:${S3_SECRET_KEY:-lomisecret}@minio:9000
+    command: ["mb", "--ignore-existing", "local/${S3_BUCKET:-lomi-documents}"]
+    depends_on:
+      minio:
+        condition: service_healthy
+
+  migrate:
+    build:
+      context: .
+      dockerfile: packages/db/Dockerfile
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-lomi}:${POSTGRES_PASSWORD:-lomi}@postgres:5432/${POSTGRES_DB:-lomi}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-lomi}:${POSTGRES_PASSWORD:-lomi}@postgres:5432/${POSTGRES_DB:-lomi}
+      REDIS_URL: redis://redis:6379
+      PORT: 3000
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-lomi-documents}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-lomi}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-lomisecret}
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres-data:
+  minio-data:
+  redis-data:
