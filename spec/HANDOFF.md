@@ -37,8 +37,9 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, `pack
 - PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/3 (docs only: specs 002, 003 and 006 marked merged) was merged into `main` on 2026-11-27 as `9a988d2`.
 - PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/4 (spec 007) was merged into `main` on 2026-11-27 as `703b84b`.
 - The `extraction-resilience` branch is fully merged; do not add to it.
-- Branch `review-api` (off `703b84b`) holds spec 004 revision 2, open for review as a PR. It was built in the worktree `../lomilabs-assignment-review-api` while another session worked in the main checkout.
-- Branch `new-versions` (off `review-api`) holds spec 005 revision 2, not yet pushed. Rebase it onto `main` once PR #5 (`review-api`) is merged.
+- PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/5 (spec 004, built in the worktree `../lomilabs-assignment-review-api`) was merged into `main` on 2026-11-27 as `cdcef46`.
+- The `review-api` branch is fully merged; do not add to it.
+- Branch `new-versions` (off `review-api`, all of which `main` now has) holds spec 005 revision 2, open for review as a PR.
 - New work: branch off `main` and open a PR.
 - Commits must be authored as `pradeepkundekar0101 <91021094+PradeepKundekar0101@users.noreply.github.com>`. The repo-local git config sets this; the machine's global identity is a different account.
 - The repo has no CI. Verification is local only.
@@ -50,8 +51,8 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, `pack
 | 001 Database schema | Done, merged to `main` (PR #1). |
 | 002 PDF object storage, upload and document reads | Revision 1 merged (PR #1). Revision 2 done and verified in docker, merged (PR #2). |
 | 003 Extraction worker (happy path) | Done and verified in docker with the real model, merged (PR #2). |
-| 004 Review API | Revision 2 done and verified (integration tests, E2E in docker with the rebuilt api image), in review on branch `review-api`. |
-| 005 New versions and carry-over | Revision 2 done and verified (unit, integration against Postgres, E2E in docker with the real model), on branch `new-versions`, stacked on `review-api`. |
+| 004 Review API | Revision 2 done and verified (integration tests, E2E in docker with the rebuilt api image), merged (PR #5). |
+| 005 New versions and carry-over | Revision 2 done and verified (unit, integration against Postgres, E2E in docker with the real model), in review on branch `new-versions`. |
 | 006 Seed the fixture documents | Done and verified in docker (`down -v`, `up`, `restart`), merged (PR #2). |
 | 007 Extraction resilience (lease heartbeat, reconciler, attempt cap, retry, health counts) | Done and verified (integration tests, `scripts/chaos.sh`, retry and Redis-down checks in docker), merged (PR #4). |
 

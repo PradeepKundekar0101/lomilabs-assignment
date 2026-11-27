@@ -1,6 +1,6 @@
 # 005 New versions and carry-over
 
-Status: Done (revision 2, from the user's requirements on 2026-11-27; on branch `new-versions`, stacked on `review-api`)
+Status: Done (revision 2, from the user's requirements on 2026-11-27; in review on branch `new-versions`)
 Depends on: 002, 003, 004, 007
 
 ## Goal
