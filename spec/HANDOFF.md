@@ -30,11 +30,12 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, `pack
 ## Git state
 
 - PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/1 (specs 001 and 002, this `spec/` folder and `CLAUDE.md`) was merged into `main` on 2026-11-27 as `9e2eb42`.
-- The local checkout is on `upload-api`, pushed to `origin/upload-api`.
+- The local checkout is on `main`, up to date with `origin/main`.
 - The `db-schema` branch is fully merged; do not add to it.
-- Branch `upload-api` (off `main`) holds spec 002 revision 2 (multipart upload, `createVersion`, the GET endpoints, the fail-fast BullMQ producer), spec 003 (the extraction worker) and spec 006 (the fixture seed), as 9 scoped commits that each pass the full check.
-  It is open for review as PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/2, not merged.
-- New work: branch off `upload-api` until PR #2 is merged (it needs those changes), then off `main`, and open a PR.
+- PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/2 (spec 002 revision 2, spec 003 and spec 006, as 9 scoped commits that each pass the full check) was merged into `main` on 2026-11-27 as `cb16ebd`.
+- The `upload-api` branch is fully merged; do not add to it.
+- New work: branch off `main` and open a PR.
+- Commits must be authored as `pradeepkundekar0101 <91021094+PradeepKundekar0101@users.noreply.github.com>`. The repo-local git config sets this; the machine's global identity is a different account.
 - The repo has no CI. Verification is local only.
 
 ## Status
@@ -42,11 +43,11 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, `pack
 | Spec | State |
 |------|-------|
 | 001 Database schema | Done, merged to `main` (PR #1). |
-| 002 PDF object storage, upload and document reads | Revision 1 merged (PR #1). Revision 2 done and verified in docker, in PR #2. |
-| 003 Extraction worker (happy path) | Done and verified in docker with the real model, in PR #2. Sweeper, retry and carry-over are later specs. |
+| 002 PDF object storage, upload and document reads | Revision 1 merged (PR #1). Revision 2 done and verified in docker, merged (PR #2). |
+| 003 Extraction worker (happy path) | Done and verified in docker with the real model, merged (PR #2). Sweeper, retry and carry-over are later specs. |
 | 004 Review API | Draft. |
 | 005 New versions and carry-over | Draft. |
-| 006 Seed the fixture documents | Done and verified in docker (`down -v`, `up`, `restart`), in PR #2. |
+| 006 Seed the fixture documents | Done and verified in docker (`down -v`, `up`, `restart`), merged (PR #2). |
 
 Draft specs contain assumptions and open questions; confirm them with the user before implementing.
 
