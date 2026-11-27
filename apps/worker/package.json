@@ -3,7 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "dist/index.js",
   "scripts": {
     "start": "node dist/main.js",
     "build": "tsc -p tsconfig.build.json",
@@ -15,9 +14,7 @@
     "@aws-sdk/client-s3": "^3.1177.0",
     "@lomi/core": "workspace:*",
     "@lomi/db": "workspace:*",
-    "@lomi/shared": "workspace:*",
     "bullmq": "^6.7.10",
     "ioredis": "^6.1.0"
-  },
-  "types": "dist/index.d.ts"
+  }
 }

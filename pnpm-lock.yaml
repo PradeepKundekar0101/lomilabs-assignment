@@ -206,15 +206,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.1177.0
         version: 3.1177.0
-      '@lomi/core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@lomi/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@lomi/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       bullmq:
         specifier: ^6.7.10
         version: 6.7.10(ioredis@6.1.0)(pg@8.23.1)
@@ -271,9 +265,6 @@ importers:
       '@lomi/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@lomi/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       bullmq:
         specifier: ^6.7.10
         version: 6.7.10(ioredis@6.1.0)(pg@8.23.1)
@@ -286,9 +277,6 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^1.14.0
         version: 1.14.0(zod@4.6.7)
-      '@lomi/shared':
-        specifier: workspace:*
-        version: link:../shared
       unpdf:
         specifier: ^2.2.2
         version: 2.2.2
@@ -298,9 +286,6 @@ importers:
 
   packages/db:
     dependencies:
-      '@lomi/shared':
-        specifier: workspace:*
-        version: link:../shared
       '@prisma/adapter-pg':
         specifier: 7.10.1
         version: 7.10.1
@@ -310,8 +295,6 @@ importers:
       prisma:
         specifier: 7.10.1
         version: 7.10.1(@types/node@26.6.10)(@types/react-dom@19.3.0(@types/react@19.3.2))(@types/react@19.3.2)(magicast@0.5.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
-
-  packages/shared: {}
 
 packages:
 
