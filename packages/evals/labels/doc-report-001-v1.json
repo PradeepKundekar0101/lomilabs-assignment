@@ -1,0 +1,11 @@
+{
+  "confirmed": true,
+  "fields": {
+    "report_quarter": { "expected": "Q3 2025" },
+    "market_area": { "expected": "Eastport-Harborview Submarket" },
+    "vacancy_rate": { "expected": "4.2%" },
+    "average_rent_1br": { "expected": "$1,985" },
+    "year_over_year_rent_growth": { "expected": "3.8%" },
+    "median_household_income": { "expected": null }
+  }
+}

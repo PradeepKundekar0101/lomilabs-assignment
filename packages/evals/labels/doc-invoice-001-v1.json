@@ -1,0 +1,10 @@
+{
+  "confirmed": true,
+  "fields": {
+    "invoice_number": { "expected": "INV-2025-0847" },
+    "issue_date": { "expected": "2025-09-14" },
+    "due_date": { "expected": "2025-10-14" },
+    "vendor_name": { "expected": "MERIDIAN OFFICE SUPPLIES LLC" },
+    "total_amount": { "expected": "$5,230.29" }
+  }
+}
