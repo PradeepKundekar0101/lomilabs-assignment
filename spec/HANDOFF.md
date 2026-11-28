@@ -54,10 +54,11 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the o
 - PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/13 (the README's cloud diagram, spec 010 marked merged) and PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/14 (spec 011 and spec 008 point 9) were merged into `main` on 2026-11-28 from `docs-pr12-merged`.
 - PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/15 (spec 012) was merged into `main` on 2026-11-28 as `00854dd`.
 - The `docs-pr12-merged` branch is fully merged; do not add to it.
-- PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/16 (spec 013) is open from `extraction-eval`.
+- PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/16 (spec 013) was merged into `main` on 2026-11-28 as `ebdc64b`.
+- Spec 014 is on the branch `evidence-hardening` (three commits, one per gap), not pushed yet.
 - New work: branch off `main` and open a PR.
 - Commits must be authored as `pradeepkundekar0101 <91021094+PradeepKundekar0101@users.noreply.github.com>`. The repo-local git config sets this; the machine's global identity is a different account.
-- The repo has no CI. Verification is local only.
+- CI (spec 014, `.github/workflows/ci.yml`) runs `pnpm turbo run lint typecheck build test` with Postgres 18 and Redis service containers, and `docker compose build`, on every push and pull request.
 
 ## Status
 
@@ -74,8 +75,9 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the o
 | 009 API layers and validated boundaries | Done, merged (PR #11). Its images were rebuilt and run end to end with spec 010's compose check. |
 | 012 Light backdrop and page headers | Done and verified (unit test, component tests, E2E in docker through nginx), merged (PR #15). A pastel sky image (BG 005 from the Figma Community "Super Visuals: Backgrounds Library.") behind the header and page titles, one header layout on both pages, a live summary on the list. |
 | 011 Delete documents | Done and verified (integration against Postgres, worker integration, component tests, E2E in docker), merged (PR #14). Soft delete (`documents.deleted_at`); deployed to the cloud on 2026-11-28 (images `00854dd`, the migrate job applied `20261128120000_soft_delete_documents`). PR #14 also has spec 008 point 9: an approved value shows only Correct. |
-| 013 Extraction eval | Done and verified, in PR #16 (branch `extraction-eval`), not merged yet. Unit tests and the full check pass; `pnpm eval` refuses unconfirmed labels. The user confirmed the four labels and chose option B (an eval-only, type-aware comparison). First real run (2026-11-28, `claude-opus-5-5`): 60/60 fields, 3/3 gaps, no evidence rejections, full agreement across 3 runs, carry-over 3/3, $0.12 and p50 2.8s for 12 calls. |
+| 013 Extraction eval | Done and verified, merged (PR #16). Unit tests and the full check pass; `pnpm eval` refuses unconfirmed labels. The user confirmed the four labels and chose option B (an eval-only, type-aware comparison). First real run (2026-11-28, `claude-opus-5-5`): 60/60 fields, 3/3 gaps, no evidence rejections, full agreement across 3 runs, carry-over 3/3, $0.12 and p50 2.8s for 12 calls. |
 | 010 Cloud deployment | Revision 2 (Google Cloud) done and verified in the cloud and in compose, merged (PR #12). Live in project `lomi-review-1128` (`asia-south1`): api `https://api-pqoxlls5ja-el.a.run.app`, UI `https://lomi-review-pi.vercel.app`. Revision 1 (AWS) was destroyed. It costs about $3 to $4 a day until `terraform destroy`. Since 2026-11-28 the api, worker and migrate job run images `00854dd` (`main` after PR #15), built on Cloud Build from a clean worktree of `origin/main` because `scripts/build-images.sh` uploads the working tree, uncommitted files included; the web app is `main` too. |
+| 014 Evidence hardening and CI | Done and verified (unit tests on the parsed fixtures, worker integration, the full check from a clean clone, an extraction in docker with the real model), on branch `evidence-hardening`. A value must appear inside its own quote (`value_not_in_evidence`); a quote under 6 characters after `norm()` is a gap (`evidence_too_short`) and does not carry a review over by still being in the new text; CI on GitHub Actions. |
 
 Draft specs contain assumptions and open questions; confirm them with the user before implementing.
 
@@ -112,6 +114,7 @@ The root `README.md` is the brief's required README: every claim in it was obser
 The api service has no healthcheck, so `docker compose up --wait` returns before it listens; give it a second before the first request.
 On 2026-11-28 all images were rebuilt from the spec 011 working tree; its E2E uploaded and then deleted `e2e-delete-list.pdf` (`a28ff0f7…`) and `e2e-delete-page.pdf` (`bb5721dc…`), which stay in Postgres with `deleted_at` set.
 The web image was then rebuilt with spec 012 (`docker compose build web`, then `up -d --no-deps --force-recreate web`). For the README screenshot (`docs/review-v2.png`, headless Chrome at 1280x900 through nginx) a new document "Meridian Office Supplies invoice" (`ef78f2c3…`) was uploaded from `invoice-001.pdf`, all five v1 values approved, and `invoice-001.v2.pdf` uploaded as v2 (2 changed, 3 carried over); `doc-invoice-001` is at v3 with nothing changed, so it no longer shows that story.
+On 2026-11-28 the worker image was rebuilt from the `evidence-hardening` branch (spec 014); its E2E uploaded "E2E spec 014 invoice" (`7195e69e…`), approved all of v1 and uploaded `invoice-001.v2.pdf` as v2 (2 pending, 3 carried over). The api and web images were not rebuilt; spec 014 does not change them.
 
 ## Gotchas found so far (read these, they cost time)
 
@@ -177,3 +180,4 @@ The web image was then rebuilt with spec 012 (`docker compose build web`, then `
 49. **`packages/evals` has no build.** `src/run.ts` runs on Node's type stripping: imports name the `.ts` file and only erasable syntax is allowed (its `tsconfig.json` enforces both). It imports `@lomi/core`'s built `dist`, so `pnpm eval` builds core first.
 50. **`norm()` only collapses whitespace.** Carry-over compares values and evidence with it (case-sensitive, no number or date parsing). The eval's `sameValue` (`packages/evals/src/score.ts`) is type-aware on purpose and is not used by carry-over (spec 013, option B).
 51. **Never set a label's `confirmed: true` yourself.** Only the user does, by hand; `pnpm eval` refuses to run until every label is confirmed.
+52. **CI pins Node 26 by hand.** `package.json` has no `engines` field on purpose: Vercel builds the web app with Node 24 (gotcha 42) and honours `engines.node`, so adding one risks production deploys (pnpm 12 itself only warns on a mismatch). If the Dockerfiles move to a new Node, change `node-version` in `.github/workflows/ci.yml` too; pnpm's version comes from `packageManager`.

@@ -8,6 +8,7 @@ An LLM extracts field values from each PDF together with the exact quote they ca
 A reviewer approves or corrects each value beside its quote.
 When a revised PDF arrives, reviews of unchanged values carry over, and only what changed comes back for review.
 
+[![CI](https://github.com/PradeepKundekar0101/lomilabs-assignment/actions/workflows/ci.yml/badge.svg)](https://github.com/PradeepKundekar0101/lomilabs-assignment/actions/workflows/ci.yml)
 ![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-26-5FA04E?logo=nodedotjs&logoColor=white)
 ![Turborepo](https://img.shields.io/badge/Turborepo-pnpm_workspaces-EF4444?logo=turborepo&logoColor=white)
@@ -260,7 +261,7 @@ For each field, the new value is compared with the same field in the latest earl
 It is **unchanged** when both hold:
 
 1. the model's value is the same, ignoring whitespace, and
-2. its evidence is the same quote, or the **old quote still appears in the new version's text**.
+2. its evidence is the same quote, or the **old quote still appears in the new version's text** and is at least 6 characters long (a shorter one proves nothing).
 
 A gap that is still a gap is unchanged too.
 An unchanged value gets the previous review copied forward and is `carried_over`; anything else is `pending`, with the previous value and review shown beside it.
@@ -288,7 +289,9 @@ The parsed text is stored per version rather than re-parsed, so the evidence off
 ### Evidence validation
 
 - Each quote must appear in the version's parsed text, ignoring only whitespace differences, since PDF text extraction and the model rarely agree on line breaks.
+- A quote shorter than 6 characters after collapsing whitespace (like `2025` or `$5`) can match anywhere, so it becomes a gap with reason `evidence_too_short`; a longer quote that appears more than once is kept at its first match.
 - The stored evidence is then the exact slice of the parsed text, with its offsets.
+- The value must also appear inside its own quote (case-sensitive, whitespace collapsed, no number or date parsing), or the field becomes a gap with reason `value_not_in_evidence`; the model's claimed value and quote stay in the run's raw response.
 - A quote that is not there becomes a gap with reason `evidence_not_found`; a field the model skipped becomes `missing_from_llm_output`; a field the model could not find keeps the model's reason.
 - `packages/core/tests/evidence.test.ts` proves a hallucinated quote becomes a gap.
 
@@ -299,11 +302,12 @@ An extraction uses about 1,100 input and 260 output tokens, roughly one cent.
 
 ## Tests
 
-**120 tests**, placed where breakage would be silent or expensive.
+**157 tests**, placed where breakage would be silent or expensive.
+[CI](.github/workflows/ci.yml) runs all of them on every push and pull request, with Postgres 18 and Redis as service containers and a fake model (no secrets), and builds every Docker image with `docker compose build`.
 
 | Package | Runs against | Covers |
 |---|---|---|
-| `packages/core` | Nothing (pure functions) | Evidence validation including a hallucinated quote, carry-over rules, model output parsing, model error messages, PDF text |
+| `packages/core` | Nothing (pure functions) | Evidence validation including a hallucinated quote, a value missing from its quote and a quote too short to locate, carry-over rules, model output parsing, model error messages, PDF text |
 | `apps/worker` | Real Postgres and Redis | Racing claims, a worker killed mid-extraction, a Redis flush, the attempt cap, retry |
 | `apps/api` | Real Postgres and Redis | Uploads and their failure modes, reviews and the stale-version `409`, carry-over end to end through the worker, retry, the seed |
 | `apps/web` | MSW | Polling starts and stops, approve and correct, the stale-version message, what counts as changed, the list order |

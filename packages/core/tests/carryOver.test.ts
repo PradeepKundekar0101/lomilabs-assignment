@@ -1,6 +1,9 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { carryOver, type BaseReview, type BaseValue } from "../src/carryOver.js";
-import type { ValidatedValue } from "../src/evidence.js";
+import { validateEvidence, type ValidatedValue } from "../src/evidence.js";
+import type { LlmField } from "../src/llm.js";
+import { extractPdfText } from "../src/pdf.js";
 
 const approve: BaseReview = { id: "review-1", action: "approve", correctedValue: null, note: "checked" };
 const correct: BaseReview = { id: "review-2", action: "correct", correctedValue: "2025-10-15", note: "typo on the PDF" };
@@ -54,6 +57,13 @@ describe("carryOver", () => {
       carried: true,
     },
     {
+      name: "same value, a short old quote still in the new text, a different quote now",
+      base: base("14", "10-14"),
+      next: next("14", "Due Date: 2025-10-14"),
+      carried: false,
+    },
+    { name: "same value, the same short quote", base: base("14", "10-14"), next: next("14", "10-14"), carried: true },
+    {
       name: "the whole text shifted (lines added above, re-wrapped), values unchanged",
       base: base("2025-10-14", "Due Date: 2025-10-14 Payment Terms: Net 30"),
       next: next("2025-10-14", "Due Date: 2025-10-14"),
@@ -101,5 +111,29 @@ describe("carryOver", () => {
       ["pending", "value-1"],
       ["carried_over", "value-2"],
     ]);
+  });
+});
+
+describe("carryOver on the fixture invoice, v1 to v2", () => {
+  const parse = async (name: string) =>
+    extractPdfText(new Uint8Array(await readFile(new URL(`../../../fixtures/documents/${name}`, import.meta.url))));
+  const answer = (dueDate: string, total: string): LlmField[] => [
+    { key: "invoice_number", value: "INV-2025-0847", evidence: "Invoice Number: INV-2025-0847", reason: null },
+    { key: "issue_date", value: "2025-09-14", evidence: "Issue Date: 2025-09-14", reason: null },
+    { key: "due_date", value: dueDate, evidence: `Due Date: ${dueDate}`, reason: null },
+    { key: "vendor_name", value: "MERIDIAN OFFICE SUPPLIES LLC", evidence: "MERIDIAN OFFICE SUPPLIES LLC", reason: null },
+    { key: "total_amount", value: total, evidence: `Total Due: ${total}`, reason: null },
+  ];
+  const invoiceFields = ["invoice_number", "issue_date", "due_date", "vendor_name", "total_amount"].map((field) => ({ field, type: "string" }));
+
+  it("leaves exactly the due date and the total pending", async () => {
+    const [v1Text, v2Text] = await Promise.all([parse("invoice-001.pdf"), parse("invoice-001.v2.pdf")]);
+    const v1 = validateEvidence(v1Text, invoiceFields, answer("2025-10-14", "$5,230.29")).values;
+    const v2 = validateEvidence(v2Text, invoiceFields, answer("2025-11-13", "$6,126.45")).values;
+    expect([...v1, ...v2].every((v) => v.gapReason === null)).toBe(true);
+
+    const reviewed = v1.map((v, i): BaseValue => ({ ...v, id: `value-${i}`, latestReview: approve }));
+    const results = carryOver(reviewed, v2, v2Text);
+    expect(v2.filter((_, i) => results[i]!.reviewStatus === "pending").map((v) => v.fieldKey)).toEqual(["due_date", "total_amount"]);
   });
 });

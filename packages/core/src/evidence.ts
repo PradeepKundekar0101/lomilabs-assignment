@@ -34,6 +34,9 @@ function normalize(original: string): { text: string; map: number[] } {
 /** Whitespace runs collapsed to one space, trimmed: the comparison evidence validation and carry-over use. */
 export const norm = (s: string) => normalize(s).text;
 
+/** Shorter quotes (after norm) like "2025" or "$5" can match in many places, so they locate nothing. */
+export const MIN_QUOTE_LENGTH = 6;
+
 const gap = (fieldKey: string, gapReason: string): ValidatedValue => ({
   fieldKey,
   value: null,
@@ -44,8 +47,9 @@ const gap = (fieldKey: string, gapReason: string): ValidatedValue => ({
 });
 
 /**
- * The hallucination defense: a value is kept only if its evidence appears in parsedText (ignoring
- * whitespace differences). Kept evidence is the original slice, so parsedText.slice(start, end) === evidence.
+ * The hallucination defense: a value is kept only if its evidence appears in parsedText and the value
+ * appears in its evidence (both ignoring whitespace differences). Kept evidence is the original slice,
+ * so parsedText.slice(start, end) === evidence.
  */
 export function validateEvidence(parsedText: string, expected: ExpectedField[], llmFields: LlmField[]): EvidenceResult {
   const doc = normalize(parsedText);
@@ -58,8 +62,14 @@ export function validateEvidence(parsedText: string, expected: ExpectedField[], 
     if (!f) return gap(field, "missing_from_llm_output");
     if (f.value === null) return gap(field, f.reason?.trim() || "not_found");
     const quote = f.evidence === null ? "" : normalize(f.evidence).text;
-    const at = quote ? doc.text.indexOf(quote) : -1;
+    if (!quote) return gap(field, "evidence_not_found");
+    if (quote.length < MIN_QUOTE_LENGTH) return gap(field, "evidence_too_short");
+    // A quote that appears more than once is still accepted; the first match is stored and highlighted.
+    const at = doc.text.indexOf(quote);
     if (at < 0) return gap(field, "evidence_not_found");
+    // The prompt asks for the value as the document states it, so a true quote contains it; the model's
+    // claimed value and quote stay in the run's raw_response for the reviewer.
+    if (!quote.includes(norm(f.value))) return gap(field, "value_not_in_evidence");
     // Quote and document are trimmed, so both ends of the match are non-space characters.
     const start = doc.map[at]!;
     const end = doc.map[at + quote.length - 1]! + 1;

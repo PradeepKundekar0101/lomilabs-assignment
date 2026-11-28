@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { readFile } from "node:fs/promises";
+import { beforeAll, describe, expect, it } from "vitest";
 import { validateEvidence } from "../src/evidence.js";
 import type { LlmField } from "../src/llm.js";
+import { extractPdfText } from "../src/pdf.js";
 
 const text = "INVOICE\nInvoice Number: INV-2025-0847\nThe initial term of this Lease shall be twenty-four (24)\nmonths, commencing on March 1, 2025";
 const fields = (...keys: string[]) => keys.map((field) => ({ field, type: "string" }));
@@ -60,5 +62,53 @@ describe("validateEvidence", () => {
     ]);
     expect(result.values.map((v) => v.fieldKey)).toEqual(["invoice_number"]);
     expect(result.dropped).toEqual(["customer_name"]);
+  });
+});
+
+describe("validateEvidence against the fixture text", () => {
+  const parse = async (name: string) =>
+    extractPdfText(new Uint8Array(await readFile(new URL(`../../../fixtures/documents/${name}`, import.meta.url))));
+  let invoice: string;
+  let lease: string;
+  beforeAll(async () => {
+    [invoice, lease] = await Promise.all([parse("invoice-001.pdf"), parse("lease-excerpt-001.pdf")]);
+  });
+
+  it("rejects a real quote whose value is not in it", () => {
+    const [v] = validateEvidence(invoice, fields("total_amount"), [llm("total_amount", "$9,999.00", "Total Due: $5,230.29")]).values;
+    expect(v).toEqual({ fieldKey: "total_amount", value: null, evidence: null, evidenceStart: null, evidenceEnd: null, gapReason: "value_not_in_evidence" });
+  });
+
+  it("keeps a real quote that contains its value, with offsets into the parsed text", () => {
+    const [v] = validateEvidence(invoice, fields("total_amount"), [llm("total_amount", "$5,230.29", "Total Due: $5,230.29")]).values;
+    expect(v).toMatchObject({ value: "$5,230.29", evidence: "Total Due: $5,230.29", gapReason: null });
+    expect(invoice.slice(v!.evidenceStart!, v!.evidenceEnd!)).toBe(v!.evidence);
+  });
+
+  it("keeps a value that the parsed text splits across a line break inside the quote", () => {
+    const quote = "The initial term of this Lease shall be twenty-four (24) months";
+    const [v] = validateEvidence(lease, fields("term_months"), [llm("term_months", "twenty-four (24) months", quote)]).values;
+    expect(v).toMatchObject({ value: "twenty-four (24) months", gapReason: null });
+    expect(v!.evidence).toBe("The initial term of this Lease shall be twenty-four (24)\nmonths");
+    expect(lease.slice(v!.evidenceStart!, v!.evidenceEnd!)).toBe(v!.evidence);
+  });
+
+  it("rejects a quote shorter than 6 characters after normalising, even one that is in the text", () => {
+    const { values } = validateEvidence(invoice, fields("invoice_number", "total_amount", "terms"), [
+      llm("invoice_number", "0847", " 0847 "),
+      llm("total_amount", "$5", "$5\n"),
+      llm("terms", "Net 30", "Net\n30"),
+    ]);
+    expect(values.map((v) => [v.fieldKey, v.value, v.gapReason])).toEqual([
+      ["invoice_number", null, "evidence_too_short"],
+      ["total_amount", null, "evidence_too_short"],
+      ["terms", "Net 30", null],
+    ]);
+  });
+
+  it("accepts a quote that appears more than once, at its first match", () => {
+    const [v] = validateEvidence(invoice, fields("delivery"), [llm("delivery", "$275.00", "$275.00")]).values;
+    expect(invoice.split("$275.00")).toHaveLength(3);
+    expect(v).toMatchObject({ value: "$275.00", evidenceStart: invoice.indexOf("$275.00"), gapReason: null });
   });
 });
