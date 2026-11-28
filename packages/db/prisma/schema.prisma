@@ -57,6 +57,8 @@ model Document {
   type             DocumentType
   title            String
   createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  // Soft delete (spec 011): set means the document is gone from the app and the API; its history stays.
+  deletedAt        DateTime?         @map("deleted_at") @db.Timestamptz(6)
   // Unique because Prisma models this as 1:1; a version is current for at most one document.
   currentVersionId String?           @unique @map("current_version_id") @db.Uuid
   currentVersion   DocumentVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])

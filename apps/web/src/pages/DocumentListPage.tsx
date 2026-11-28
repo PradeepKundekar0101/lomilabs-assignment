@@ -1,8 +1,11 @@
+import { Trash2 } from 'lucide-react'
 import { Link } from 'react-router'
 import { useDocuments } from '@/api/hooks'
+import { DeleteDialog } from '@/components/DeleteDialog'
 import { StatusBadge } from '@/components/StatusBadge'
 import { UploadDialog } from '@/components/UploadDialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -12,8 +15,9 @@ import { cn } from '@/lib/utils'
 
 // Phones show the title (with the counts under it) and the status; the other columns need a wider screen.
 const NARROW_HIDDEN = 'max-md:hidden'
-const COLUMNS = ['Title', 'Type', 'Version', 'Status', 'Progress']
-const columnClass = (c: string) => (c === 'Type' || c === 'Version' ? NARROW_HIDDEN : c === 'Progress' ? 'max-sm:hidden md:w-64' : undefined)
+const COLUMNS = ['Title', 'Type', 'Version', 'Status', 'Progress', 'Actions']
+const columnClass = (c: string) =>
+  c === 'Type' || c === 'Version' ? NARROW_HIDDEN : c === 'Progress' ? 'max-sm:hidden md:w-64' : c === 'Actions' ? 'w-px' : undefined
 // The first and last columns sit a little further in, like the card's padding.
 const PAD = 'px-4 first:pl-5 last:pr-5'
 const CELL = cn(PAD, 'py-3.5')
@@ -42,7 +46,7 @@ export function DocumentListPage() {
               <TableRow className="hover:bg-transparent">
                 {COLUMNS.map((c) => (
                   <TableHead key={c} className={cn(PAD, 'h-11 text-xs text-muted-foreground', columnClass(c))}>
-                    {c}
+                    {c === 'Actions' ? <span className="sr-only">{c}</span> : c}
                   </TableHead>
                 ))}
               </TableRow>
@@ -97,6 +101,17 @@ export function DocumentListPage() {
                           </span>
                         </div>
                       )}
+                    </TableCell>
+                    <TableCell className={cn(PAD, 'py-2 text-right')}>
+                      <DeleteDialog
+                        id={doc.id}
+                        title={doc.title}
+                        trigger={
+                          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" aria-label={`Delete ${doc.title}`}>
+                            <Trash2 aria-hidden />
+                          </Button>
+                        }
+                      />
                     </TableCell>
                   </TableRow>
                 ))

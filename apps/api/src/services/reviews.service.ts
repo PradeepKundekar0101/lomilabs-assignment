@@ -13,7 +13,9 @@ export async function reviewValue(db: PrismaClient, valueId: string, input: Revi
     // The worker's commit takes this lock too, and an upload's version insert waits on it through the foreign key:
     // no new version, and no other review of this document, interleaves. Every read below is a new statement,
     // so it sees whatever committed before the lock was ours.
-    await tx.$queryRaw`SELECT 1 FROM documents WHERE id = ${documentId} FOR UPDATE`;
+    // A deleted document's values are not found (spec 011); checked under the lock, so no review lands after a delete.
+    const locked = await tx.$queryRaw<unknown[]>`SELECT 1 FROM documents WHERE id = ${documentId} AND deleted_at IS NULL FOR UPDATE`;
+    if (!locked.length) return "not_found";
     const { currentVersion } = await tx.document.findUniqueOrThrow({
       where: { id: documentId },
       select: { currentVersion: { select: { id: true, versionNo: true, status: true } } },

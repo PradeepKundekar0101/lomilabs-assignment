@@ -7,10 +7,10 @@ export async function retryDocument(deps: RetryDeps, documentId: string): Promis
     UPDATE document_versions v
     SET status = 'queued', error = null, attempts = 0, lease_until = null, updated_at = now()
     FROM documents d
-    WHERE d.id = ${documentId} AND v.id = d.current_version_id AND v.status = 'failed'
+    WHERE d.id = ${documentId} AND d.deleted_at IS NULL AND v.id = d.current_version_id AND v.status = 'failed'
     RETURNING v.id`;
   if (!version) {
-    const exists = await deps.db.document.findUnique({ where: { id: documentId }, select: { id: true } });
+    const exists = await deps.db.document.findUnique({ where: { id: documentId, deletedAt: null }, select: { id: true } });
     return exists ? "not_failed" : "not_found";
   }
   // As in createVersion: the queued row is the source of truth, and the reconciler enqueues it if this fails.

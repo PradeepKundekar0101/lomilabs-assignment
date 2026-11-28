@@ -3,7 +3,7 @@ import { HttpError, StorageUnavailableError, VersionRejectedError } from "../err
 import { DocumentParamsSchema, VersionParamsSchema } from "../schemas/params.schema.js";
 import { NewVersionFormSchema, UploadFormSchema } from "../schemas/upload.schema.js";
 import { badRequest, notFound, validate } from "../schemas/validate.js";
-import { getDocumentProgress, getDocumentView, listDocuments } from "../services/documents.service.js";
+import { deleteDocument, getDocumentProgress, getDocumentView, listDocuments } from "../services/documents.service.js";
 import type { AppDeps } from "../types/app.js";
 import type { VersionTarget } from "../types/versions.js";
 
@@ -74,6 +74,13 @@ export function documentsController(deps: AppDeps) {
       if (result === "not_found") throw documentNotFound();
       if (result === "not_failed") throw new HttpError(409, "only a failed extraction can be retried");
       res.status(202).json({ id, versionId: result.versionId, status: "queued" });
+    },
+
+    /** Soft-deletes the document and stops its extraction (spec 011). */
+    async remove(req: Request, res: Response) {
+      const { id } = await validate(DocumentParamsSchema, req.params, documentNotFound);
+      if (!(await deleteDocument(deps.db, id))) throw documentNotFound();
+      res.sendStatus(204);
     },
   };
 }

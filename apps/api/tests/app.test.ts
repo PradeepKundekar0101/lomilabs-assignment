@@ -281,7 +281,7 @@ describe("CORS for the review UI on another origin", () => {
 
   it("allows WEB_ORIGIN's requests and answers its preflight", async () => {
     expect(await headers("/documents", { headers: { origin: WEB } }, WEB)).toEqual({ status: 200, allow: WEB, methods: null });
-    expect(await headers("/values/x/review", preflight, WEB)).toEqual({ status: 204, allow: WEB, methods: "GET, POST" });
+    expect(await headers("/values/x/review", preflight, WEB)).toEqual({ status: 204, allow: WEB, methods: "GET, POST, DELETE" });
   });
   it("sends no CORS headers to another origin, or when WEB_ORIGIN is unset", async () => {
     expect((await headers("/documents", { headers: { origin: "https://evil.example" } }, WEB)).allow).toBeNull();

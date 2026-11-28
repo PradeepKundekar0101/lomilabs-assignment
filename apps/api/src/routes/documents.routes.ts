@@ -10,6 +10,7 @@ export function documentsRoutes(deps: AppDeps): Router {
     .get("/", documents.list)
     .post("/", multipart, documents.upload)
     .get("/:id", documents.get)
+    .delete("/:id", documents.remove)
     .post("/:id/versions", multipart, documents.uploadVersion)
     .get("/:id/versions/:n", documents.getVersion)
     .get("/:id/progress", documents.progress)

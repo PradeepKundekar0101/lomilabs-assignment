@@ -67,6 +67,15 @@ describe.skipIf(!url)("processVersion against Postgres", () => {
     });
   }
 
+  /** What the api's deleteDocument does (spec 011): under the document lock, mark it deleted and stop its in-flight versions. */
+  async function deleteDocument(documentId: string) {
+    await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM documents WHERE id = ${documentId} FOR UPDATE`;
+      await tx.document.update({ where: { id: documentId }, data: { deletedAt: new Date() } });
+      await tx.documentVersion.updateMany({ where: { documentId, status: { in: ["queued", "extracting"] } }, data: { status: "superseded", leaseUntil: null } });
+    });
+  }
+
   const state = async (versionId: string) => ({
     version: await db.documentVersion.findUniqueOrThrow({ where: { id: versionId } }),
     values: await db.extractedValue.findMany({ where: { versionId }, orderBy: { fieldKey: "asc" } }),
@@ -200,6 +209,31 @@ describe.skipIf(!url)("processVersion against Postgres", () => {
     expect(version.status).toBe("superseded");
     expect(values).toEqual([]);
     expect(runs[0]).toMatchObject({ outcome: "superseded", prompt: null });
+  });
+
+  it("writes no values when the document is deleted while the model runs", async () => {
+    const { documentId, versionId } = await seedInvoice();
+    const llm = fakeLlm(invoiceAnswer, () => deleteDocument(documentId));
+    expect(await processVersion(deps({ llm }), versionId)).toBe("superseded");
+
+    const { version, values, runs } = await state(versionId);
+    expect(version).toMatchObject({ status: "superseded", leaseUntil: null });
+    expect(values).toEqual([]);
+    expect(runs[0]).toMatchObject({ outcome: "superseded" });
+  });
+
+  it("skips the model when the document is deleted before the call, and never claims it again", async () => {
+    const { documentId, versionId } = await seedInvoice();
+    const llm = fakeLlm();
+    const getObject = async () => (await deleteDocument(documentId), invoicePdf);
+    expect(await processVersion(deps({ llm, getObject }), versionId)).toBe("superseded");
+
+    const { version, values, runs } = await state(versionId);
+    expect(llm.calls).toBe(0);
+    expect(version.status).toBe("superseded");
+    expect(values).toEqual([]);
+    expect(runs[0]).toMatchObject({ outcome: "superseded", prompt: null });
+    expect(await processVersion(deps({ llm }), versionId)).toBe("not_claimable");
   });
 });
 
