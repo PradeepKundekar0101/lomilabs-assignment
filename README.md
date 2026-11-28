@@ -8,6 +8,7 @@ An LLM extracts field values from each PDF together with the exact quote they ca
 A reviewer approves or corrects each value beside its quote.
 When a revised PDF arrives, reviews of unchanged values carry over, and only what changed comes back for review.
 
+[![CI](https://github.com/PradeepKundekar0101/lomilabs-assignment/actions/workflows/ci.yml/badge.svg)](https://github.com/PradeepKundekar0101/lomilabs-assignment/actions/workflows/ci.yml)
 ![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-26-5FA04E?logo=nodedotjs&logoColor=white)
 ![Turborepo](https://img.shields.io/badge/Turborepo-pnpm_workspaces-EF4444?logo=turborepo&logoColor=white)
@@ -301,11 +302,12 @@ An extraction uses about 1,100 input and 260 output tokens, roughly one cent.
 
 ## Tests
 
-**120 tests**, placed where breakage would be silent or expensive.
+**157 tests**, placed where breakage would be silent or expensive.
+[CI](.github/workflows/ci.yml) runs all of them on every push and pull request, with Postgres 18 and Redis as service containers and a fake model (no secrets), and builds every Docker image with `docker compose build`.
 
 | Package | Runs against | Covers |
 |---|---|---|
-| `packages/core` | Nothing (pure functions) | Evidence validation including a hallucinated quote, carry-over rules, model output parsing, model error messages, PDF text |
+| `packages/core` | Nothing (pure functions) | Evidence validation including a hallucinated quote, a value missing from its quote and a quote too short to locate, carry-over rules, model output parsing, model error messages, PDF text |
 | `apps/worker` | Real Postgres and Redis | Racing claims, a worker killed mid-extraction, a Redis flush, the attempt cap, retry |
 | `apps/api` | Real Postgres and Redis | Uploads and their failure modes, reviews and the stale-version `409`, carry-over end to end through the worker, retry, the seed |
 | `apps/web` | MSW | Polling starts and stops, approve and correct, the stale-version message, what counts as changed, the list order |

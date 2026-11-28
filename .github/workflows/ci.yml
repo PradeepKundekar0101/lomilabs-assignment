@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, typecheck, build, test
+    runs-on: ubuntu-latest
+    # The integration tests use their own database and Redis database (spec 007); no model key is set,
+    # so a test that reached the real model would fail instead of spending.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: lomi
+          POSTGRES_PASSWORD: lomi
+          POSTGRES_DB: lomi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lomi -d lomi_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://lomi:lomi@127.0.0.1:5432/lomi_test
+      TEST_REDIS_URL: redis://127.0.0.1:6379/1
+    steps:
+      - uses: actions/checkout@v5
+      # No version input: the action reads package.json's packageManager (pnpm@12.23.0).
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          # package.json has no engines field; every Dockerfile builds on node:26-alpine.
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run lint typecheck build test
+
+  docker:
+    name: Docker images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker compose build
