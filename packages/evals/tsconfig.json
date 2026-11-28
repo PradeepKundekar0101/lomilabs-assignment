@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  // No build: src/run.ts runs on Node's type stripping, so imports name the .ts file and only erasable syntax is allowed.
+  "compilerOptions": { "noEmit": true, "allowImportingTsExtensions": true, "erasableSyntaxOnly": true, "verbatimModuleSyntax": true },
+  "include": ["src", "tests"]
+}

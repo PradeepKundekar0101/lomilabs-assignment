@@ -1,0 +1,10 @@
+{
+  "confirmed": true,
+  "fields": {
+    "tenant_name": { "expected": "Dana Okafor" },
+    "monthly_rent": { "expected": "$2,350.00" },
+    "security_deposit": { "expected": "$3,525.00" },
+    "lease_start": { "expected": "March 1, 2025" },
+    "term_months": { "expected": "24" }
+  }
+}
