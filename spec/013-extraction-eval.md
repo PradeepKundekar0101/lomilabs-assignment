@@ -1,6 +1,6 @@
 # 013 Extraction eval
 
-Status: Done (verified 2026-11-28; not committed yet)
+Status: Done (verified 2026-11-28; in [PR #16](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/16), not merged yet)
 Depends on: 003, 005
 
 ## Goal
