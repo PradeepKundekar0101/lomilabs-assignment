@@ -6,8 +6,8 @@ import { ExpectedFieldsSchema, type Llm, type LlmField } from "@lomi/core";
 import { createDb, type PrismaClient } from "@lomi/db";
 import { processVersion } from "@lomi/worker/extract";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createApp } from "./app.js";
-import { createVersion, type CreateVersionDeps } from "./create-version.js";
+import { createApp } from "../src/app.js";
+import { createVersion, type CreateVersionDeps } from "../src/create-version.js";
 
 // Spec 005 end to end in one process: uploads and reviews through the HTTP API, extraction by the worker's
 // processVersion with a fake model. Runs against a dedicated test database (see spec 007):

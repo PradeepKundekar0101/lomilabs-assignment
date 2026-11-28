@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { carryOver, type BaseReview, type BaseValue } from "./carryOver.js";
-import type { ValidatedValue } from "./evidence.js";
+import { carryOver, type BaseReview, type BaseValue } from "../src/carryOver.js";
+import type { ValidatedValue } from "../src/evidence.js";
 
 const approve: BaseReview = { id: "review-1", action: "approve", correctedValue: null, note: "checked" };
 const correct: BaseReview = { id: "review-2", action: "correct", correctedValue: "2025-10-15", note: "typo on the PDF" };

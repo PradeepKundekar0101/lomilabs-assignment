@@ -1,8 +1,8 @@
 import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
-import { createApp, type AppDeps } from "./app.js";
-import { StorageUnavailableError, VersionRejectedError } from "./create-version.js";
+import { createApp, type AppDeps } from "../src/app.js";
+import { StorageUnavailableError, VersionRejectedError } from "../src/create-version.js";
 
 const fail = async () => {
   throw new Error("down");

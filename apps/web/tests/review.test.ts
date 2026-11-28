@@ -1,7 +1,7 @@
 import type { DocumentListItem } from '@lomi/shared'
 import { describe, expect, it } from 'vitest'
-import { approve, invoiceV2, value } from '@/test/fixtures'
-import { isChanged, reviewSummary, sortForTriage } from './review'
+import { approve, invoiceV2, value } from './fixtures'
+import { isChanged, reviewSummary, sortForTriage } from '@/lib/review'
 
 describe('isChanged', () => {
   const prev = (v: string | null, latestReview = approve()) => ({ versionNo: 1, value: v, effectiveValue: v, latestReview })

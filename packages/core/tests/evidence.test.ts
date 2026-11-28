@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { validateEvidence } from "./evidence.js";
-import type { LlmField } from "./llm.js";
+import { validateEvidence } from "../src/evidence.js";
+import type { LlmField } from "../src/llm.js";
 
 const text = "INVOICE\nInvoice Number: INV-2025-0847\nThe initial term of this Lease shall be twenty-four (24)\nmonths, commencing on March 1, 2025";
 const fields = (...keys: string[]) => keys.map((field) => ({ field, type: "string" }));

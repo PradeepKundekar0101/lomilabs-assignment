@@ -4,8 +4,8 @@ import { createDb, type PrismaClient, type VersionStatus } from "@lomi/db";
 import { Worker } from "bullmq";
 import { Redis } from "ioredis";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { retryDocument } from "./retry.js";
-import { enqueueTo, extractionQueue } from "./services.js";
+import { retryDocument } from "../src/retry.js";
+import { enqueueTo, extractionQueue } from "../src/services.js";
 
 // A dedicated test database and Redis database (see spec 007), e.g.
 // TEST_DATABASE_URL=postgres://lomi:lomi@127.0.0.1:5433/lomi_test TEST_REDIS_URL=redis://127.0.0.1:6379/1

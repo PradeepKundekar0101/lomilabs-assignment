@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { createVersion, StorageUnavailableError, VersionRejectedError, type CreateVersionDeps } from "./create-version.js";
+import { createVersion, StorageUnavailableError, VersionRejectedError, type CreateVersionDeps } from "../src/create-version.js";
 
 const bytes = "%PDF-1.7 test";
 const sha = createHash("sha256").update(bytes).digest("hex");

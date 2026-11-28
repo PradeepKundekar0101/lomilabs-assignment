@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createDb, type PrismaClient } from "@lomi/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { seed, type ManifestDocument } from "./seed.js";
+import { seed, type ManifestDocument } from "../src/seed.js";
 
 // Runs against a dedicated test database (see spec 007): TEST_DATABASE_URL=postgres://lomi:lomi@127.0.0.1:5433/lomi_test
 const url = process.env.TEST_DATABASE_URL;
