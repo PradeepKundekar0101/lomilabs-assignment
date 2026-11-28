@@ -378,7 +378,10 @@ terraform -chdir=infra apply -var image_tag=$tag -var web_origin=https://<vercel
 
 Taking the services down for step 4 means migrations always run before new code serves requests.
 
-The web app builds with the API's URL baked in (`apps/web/vercel.json` holds the build settings, the SPA fallback and the cache headers):
+The web app builds with the API's URL baked in (`apps/web/vercel.json` holds the build settings, the SPA fallback and the cache headers).
+The Vercel project is connected to this GitHub repository with its Root Directory set to `apps/web`, so every push to `main` builds and deploys the web app, with `VITE_API_URL` from the project's production environment.
+The new UI goes live as soon as `main` moves, so deploy the api first when a change needs both.
+To deploy the web app by hand instead:
 
 ```bash
 vercel link --cwd apps/web
