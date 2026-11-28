@@ -5,32 +5,23 @@ import {
   extractPdfText,
   parseLlmOutput,
   validateEvidence,
-  type ExpectedFields,
-  type Llm,
 } from "@lomi/core";
 import type { PrismaClient } from "@lomi/db";
-
-export interface ExtractDeps {
-  db: PrismaClient;
-  getObject: (key: string) => Promise<Uint8Array>;
-  llm: Llm;
-  model: string;
-  fields: ExpectedFields;
-  /** How long a claim lasts without a heartbeat; the heartbeat renews it every third of that. */
-  leaseSeconds: number;
-}
+import { z } from "zod";
+import { ExtractJobSchema } from "./schemas/job.schema.js";
+import type { ClaimedVersion, ExtractDeps, ExtractOutcome } from "./types/extract.js";
 
 /** Claims allowed per version before it is failed: only attempts that never finished (a crash) reach it. */
 export const MAX_ATTEMPTS = 3;
 
-export type ExtractOutcome = "not_claimable" | "superseded" | "extracted" | "failed";
-
-interface ClaimedVersion {
-  id: string;
-  document_id: string;
-  version_no: number;
-  storage_key: string;
-  attempts: number;
+/** Runs a queue job. Its data must be an `ExtractJob`; anything else is logged and skipped, since no retry can fix it. */
+export async function processJob(deps: ExtractDeps, jobId: string | undefined, data: unknown): Promise<ExtractOutcome | "skipped"> {
+  const job = ExtractJobSchema.safeParse(data);
+  if (!job.success) {
+    console.error(`job ${jobId}: invalid data, skipped\n${z.prettifyError(job.error)}`);
+    return "skipped";
+  }
+  return processVersion(deps, job.data.versionId);
 }
 
 /** Runs one extraction attempt for a version (specs 003, 007). Never throws for an extraction failure. */

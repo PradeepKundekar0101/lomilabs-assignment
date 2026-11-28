@@ -109,6 +109,7 @@ pnpm workspaces with a Turborepo pipeline.
 ```text
 apps/
   api/        Express API: uploads, reads, reviews, retry, health; also the fixture seed
+    src/      routes/ -> controllers/ -> services/, with schemas/ (zod), types/, middleware/
   worker/     BullMQ worker: claim, parse, call the model, validate, carry over, commit; also the reconciler
   web/        Vite + React review UI (TanStack Query, shadcn/ui), served by nginx
 packages/
@@ -127,6 +128,9 @@ fixtures/     The sample PDFs, the manifest and the expected fields
   "Is this quote really in the text?" and "did this field change?" are unit-tested without Postgres, Redis or a model.
 - **The API contract is written once, in `packages/shared`.**
   The UI validates every response against it instead of trusting a type cast.
+- **Every input is parsed with zod where it enters.**
+  Route params, the upload form, review bodies, the seed manifest, queue jobs and each service's environment; a bad environment stops startup with every problem listed.
+  In the api, routes only map paths, controllers validate and turn results into HTTP, and services hold the logic and never see HTTP.
 - **The pipeline does real work.**
   `generate` (the Prisma client) runs before `build`, `typecheck` and `test`; each package builds after its dependencies; `migrate-test` prepares the test database before the integration tests; `lint` runs oxlint everywhere.
   A second `pnpm build` is fully cached.

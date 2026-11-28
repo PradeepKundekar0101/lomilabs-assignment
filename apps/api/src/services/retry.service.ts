@@ -1,11 +1,4 @@
-import type { PrismaClient } from "@lomi/db";
-
-export interface RetryDeps {
-  db: Pick<PrismaClient, "$queryRaw" | "document">;
-  enqueue: (versionId: string) => Promise<void>;
-}
-
-export type RetryResult = { versionId: string } | "not_found" | "not_failed";
+import type { RetryDeps, RetryResult } from "../types/versions.js";
 
 /** Queues a document's failed current version for a fresh set of attempts (spec 007). */
 export async function retryDocument(deps: RetryDeps, documentId: string): Promise<RetryResult> {

@@ -1,35 +1,6 @@
 import { createHash } from "node:crypto";
-import type { DocumentType, PrismaClient, VersionStatus } from "@lomi/db";
-
-export interface CreateVersionDeps {
-  putObject: (key: string, body: Buffer, contentType: string) => Promise<void>;
-  db: Pick<PrismaClient, "$transaction">;
-  enqueue: (versionId: string) => Promise<void>;
-}
-
-export interface CreateVersionResult {
-  documentId: string;
-  versionId: string;
-  versionNo: number;
-  status: VersionStatus;
-}
-
-/** Where a new version goes: an existing document, or a new one (with a chosen id, or a generated uuid). */
-export type VersionTarget = { documentId: string } | { id?: string; type: DocumentType; title: string };
-
-/** Object storage did not take the file, so nothing was written. */
-export class StorageUnavailableError extends Error {
-  constructor(cause: unknown) {
-    super("object storage unavailable", { cause });
-  }
-}
-
-/** A new version of an existing document was refused, and no row was written. */
-export class VersionRejectedError extends Error {
-  constructor(readonly reason: "document_not_found" | "identical_to_current") {
-    super(reason);
-  }
-}
+import { StorageUnavailableError, VersionRejectedError } from "../errors.js";
+import type { CreateVersionDeps, CreateVersionResult, VersionTarget } from "../types/versions.js";
 
 const PDF_MIME = "application/pdf";
 

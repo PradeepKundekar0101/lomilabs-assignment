@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { ExpectedFieldsSchema, ExtractionError, type Llm, type LlmField } from "@lomi/core";
 import { createDb, type PrismaClient } from "@lomi/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { processVersion, type ExtractDeps } from "../src/extract.js";
+import { processJob, processVersion } from "../src/extract.js";
+import type { ExtractDeps } from "../src/types/extract.js";
 
 // Runs against a dedicated test database (see spec 007): TEST_DATABASE_URL=postgres://lomi:lomi@127.0.0.1:5433/lomi_test
 const url = process.env.TEST_DATABASE_URL;
@@ -199,5 +200,21 @@ describe.skipIf(!url)("processVersion against Postgres", () => {
     expect(version.status).toBe("superseded");
     expect(values).toEqual([]);
     expect(runs[0]).toMatchObject({ outcome: "superseded", prompt: null });
+  });
+});
+
+describe("processJob", () => {
+  it("skips a job whose data has no uuid versionId, before touching the database or the model", async () => {
+    const untouched = new Proxy({} as PrismaClient, {
+      get: () => {
+        throw new Error("database touched");
+      },
+    });
+    const llm = fakeLlm();
+    const deps: ExtractDeps = { db: untouched, getObject: async () => invoicePdf, llm, model: "fake-model", fields, leaseSeconds: 60 };
+    for (const data of [null, {}, { versionId: 42 }, { versionId: "not-a-uuid" }]) {
+      expect(await processJob(deps, "job-1", data), JSON.stringify(data)).toBe("skipped");
+    }
+    expect(llm.calls).toBe(0);
   });
 });

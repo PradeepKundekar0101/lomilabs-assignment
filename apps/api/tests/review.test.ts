@@ -7,7 +7,7 @@ import { createDb, type PrismaClient, type ReviewStatus, type VersionStatus } fr
 import { DocumentListSchema, DocumentViewSchema, ProgressSchema } from "@lomi/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { createVersion } from "../src/create-version.js";
+import { createVersion } from "../src/services/versions.service.js";
 
 // Runs against a dedicated test database (see spec 007): TEST_DATABASE_URL=postgres://lomi:lomi@127.0.0.1:5433/lomi_test
 const dbUrl = process.env.TEST_DATABASE_URL;
