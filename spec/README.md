@@ -23,7 +23,8 @@ Every feature starts as a numbered spec in this folder, and code follows the spe
 | 006 | [Seed the fixture documents](006-seed-fixtures.md) | Done (merged in [PR #2](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/2)) |
 | 007 | [Extraction resilience](007-extraction-resilience.md) | Done (merged in [PR #4](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/4)) |
 | 008 | [Review UI](008-review-ui.md) | Done (revision 2, merged in [PR #7](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/7)) |
-| 009 | [API layers and validated boundaries](009-api-layers-and-validation.md) | Done (branch `api-layers`; docker E2E not yet run) |
+| 009 | [API layers and validated boundaries](009-api-layers-and-validation.md) | Done (merged in [PR #11](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/11)) |
+| 010 | [Cloud deployment](010-cloud-deployment.md) | Done (revision 2, Google Cloud; branch `aws-deploy`, not yet committed) |
 
 ## Template
 

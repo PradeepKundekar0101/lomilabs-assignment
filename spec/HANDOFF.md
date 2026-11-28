@@ -25,6 +25,9 @@ Monorepo: pnpm 12 workspaces + turbo, TypeScript 7, Node 26, vitest, oxlint.
 | `fixtures/` | Copied from the assignment repo: sample PDFs, `documents.json` manifest, `expected-fields.json`. |
 | `docker-compose.yml` | postgres, redis, minio, minio-init, migrate-seed (migrations, then the fixture seed, from the api image), api, worker, web. |
 | `scripts/chaos.sh` | Kills the worker and flushes Redis mid-extraction against the running stack, then checks everything settles. |
+| `infra/` | Terraform for Google Cloud (spec 010): Cloud Run api service, worker pool and migrate job; Cloud SQL; Memorystore; a Cloud Storage bucket; Secret Manager; Artifact Registry. Local state, gitignored. |
+| `cloudbuild.yaml`, `scripts/build-images.sh`, `scripts/run-migrate.sh` | Build the amd64 images on Cloud Build; run the migrate job and print its logs. The deploy steps are in the root `README.md`'s Deployment section. |
+| `apps/web/vercel.json` | The web app's Vercel build settings, SPA fallback and cache headers. |
 | `spec/` | Specs for spec-driven development. See `spec/README.md`. |
 
 The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the old `packages/shared`) was deleted with spec 003; spec 008 recreated `packages/shared` for the API's schemas.
@@ -44,6 +47,8 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the o
 - The `new-versions` branch is fully merged; do not add to it.
 - PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/7 (spec 008 revisions 1 and 2, the root `README.md` and the submission-check fixes) was merged into `main` on 2026-11-28 as `81db5a9`.
 - The `review-ui` branch is fully merged; do not add to it.
+- PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/10 (tests folder) and PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/11 (spec 009) were merged into `main` on 2026-11-28 (`0ce591d`).
+- Spec 010 is on branch `aws-deploy` (off `0ce591d`; named before the move to Google Cloud), uncommitted as of 2026-11-28.
 - New work: branch off `main` and open a PR.
 - Commits must be authored as `pradeepkundekar0101 <91021094+PradeepKundekar0101@users.noreply.github.com>`. The repo-local git config sets this; the machine's global identity is a different account.
 - The repo has no CI. Verification is local only.
@@ -60,7 +65,8 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the o
 | 006 Seed the fixture documents | Done and verified in docker (`down -v`, `up`, `restart`), merged (PR #2). |
 | 007 Extraction resilience (lease heartbeat, reconciler, attempt cap, retry, health counts) | Done and verified (integration tests, `scripts/chaos.sh`, retry and Redis-down checks in docker), merged (PR #4). |
 | 008 Review UI | Revision 2 (the Lomi Labs design system) done and verified (component tests with MSW, api integration, E2E in docker through nginx), merged (PR #7). The 2026-11-28 submission check added fixes (list order, stale toast, readable model errors, nginx cache headers) and the root `README.md`, also in PR #7. |
-| 009 API layers and validated boundaries | Done on branch `api-layers` (off `tests-folder`, PR #10); verified by the full turbo check with Postgres and Redis. The docker E2E was skipped at the user's request: the rebuilt api, worker and migrate-seed images exist but have not been run, and the 2026-11-28 build filled the disk (Docker restarted, build cache not yet pruned). |
+| 009 API layers and validated boundaries | Done, merged (PR #11). Its images were rebuilt and run end to end with spec 010's compose check. |
+| 010 Cloud deployment | Revision 2 (Google Cloud) done and verified in the cloud and in compose, on branch `aws-deploy`, uncommitted. Live in project `lomi-review-1128` (`asia-south1`): api `https://api-pqoxlls5ja-el.a.run.app`, UI `https://lomi-review-pi.vercel.app`. Revision 1 (AWS) was destroyed. It costs about $3 to $4 a day until `terraform destroy`. |
 
 Draft specs contain assumptions and open questions; confirm them with the user before implementing.
 
@@ -144,3 +150,13 @@ The api service has no healthcheck, so `docker compose up --wait` returns before
 34. **The api's layers (spec 009).** Routes only map paths; a controller validates with `validate(schema, input, toError)` and throws `HttpError`, which `middleware/error-handler.ts` turns into `{ error, ...details }`; services never import express. Each param, form or body schema keeps the route's old status and message (a bad id is a 404, not a 400), so add new inputs the same way. Interfaces and types go in `types/`, never next to the code, and zod-inferred types are re-exported there.
 35. **Only the multipart parser maps an oversized body to `400 file must be at most 10 MB`.** It does so with an error handler inside the route's middleware chain (`middleware/multipart.ts`); any other oversized body keeps body-parser's `413`.
 36. **Every entry point parses its environment with zod** (`loadEnv` in `schemas/env.schema.ts`, in both apps), so a missing variable stops startup with all problems listed. Add new variables to the schema, not to `process.env` reads.
+37. **Deploying to Google Cloud.** gcloud is signed in as `developer@brokwise.com` (org `chiragcodes.com`), project `lomi-review-1128`, billing account "Firebase Payment". Terraform needs `TF_VAR_project_id` and `TF_VAR_anthropic_api_key` (read it from `.env` without printing it). The steps are in the README's Deployment section.
+38. **The org forbids service account keys** (`iam.disableServiceAccountKeyCreation`), which includes Cloud Storage HMAC keys. That is why the apps use `gcsBucket` (`packages/core/src/gcs.ts`, the JSON API with the metadata server's token) and `GCS_BUCKET` on GCP instead of the S3 API. It only works where a metadata server exists (Cloud Run), not on a laptop.
+39. **`gcloud run worker-pools` fails** in this SDK (no `grpc` Python module). Scale the worker through the REST API: `PATCH https://run.googleapis.com/v2/projects/lomi-review-1128/locations/asia-south1/workerPools/worker?updateMask=scaling.manualInstanceCount` with `{"scaling":{"manualInstanceCount":0}}` and `Authorization: Bearer $(gcloud auth print-access-token)`. Terraform's value is 1, so scale back to 1.
+40. **Cloud Run gives a stopped container 10 seconds,** and an extraction takes 3 to 6, so stopping the worker lets it finish its job. A hard kill mid-extraction is only reproducible locally (`scripts/chaos.sh`).
+41. **Flush Memorystore from inside the VPC** by running the migrate job with its argument overridden: `gcloud run jobs execute migrate --region asia-south1 --wait --args="$script"`, where `$script` is `node -e '...flushall()...'` built with a quoted heredoc (shell quoting through `--args` and `sh -c` broke twice).
+42. **Vercel only builds with Node 24.x;** the project `lomi-review` (personal scope `conchais-projects-9ae85dec`) was switched from 26.x with `vercel api`. Deploy with `vercel build --prod` locally and `vercel deploy --prebuilt --prod` (both `--cwd apps/web`). `VITE_API_URL` is also set in the project's production environment.
+43. **AWS (spec 010 revision 1) is gone.** Account 480073428925 is on an AWS suspension warning (support case 179466845600789; its owner must secure it and reply by 2026-11-29); ECS refused every task and CloudFront needed verification. Everything there was destroyed. The CLI's `default` profile still points at it: do not deploy there.
+44. **zsh does not split unquoted variables,** so `for x in $list` runs once. Pipe into `while read -r x` instead.
+45. **Disk.** On 2026-11-28 the disk reached 514 MB free; `docker builder prune -f`, removing `infra/.terraform` (the AWS provider) and unused images freed 24 GB. Building images on Cloud Build keeps the laptop out of it.
+

@@ -37,6 +37,7 @@ When a revised PDF arrives, reviews of unchanged values carry over, and only wha
 - [How extraction runs](#how-extraction-runs)
 - [Decisions the brief left open](#decisions-the-brief-left-open)
 - [Tests](#tests)
+- [Deployment](#deployment)
 - [What I cut, and what is next](#what-i-cut-and-what-is-next)
 - [At 10,000 documents](#at-10000-documents)
 
@@ -91,7 +92,7 @@ The first build takes several minutes, because it installs the npm packages insi
 
 | Flow | What travels on it |
 |---|---|
-| Web app → API | Every call goes through nginx at `/api`, so the browser needs no CORS and no API host. |
+| Web app → API | Every call goes through nginx at `/api`, so the browser needs no CORS and no API host. On Vercel the bundle calls the API's Cloud Run URL, and the api allows that one origin ([Deployment](#deployment)). |
 | API → S3 bucket | The PDF bytes, stored as `pdfs/<sha256>.pdf` (MinIO locally). |
 | API → Postgres | The document and version rows, and every review. |
 | API → Redis | One job per version to extract, `{versionId}`. |
@@ -118,6 +119,8 @@ packages/
   shared/     Zod schemas of the API's responses and of the review input
 spec/         One spec per feature, written before the code; HANDOFF.md has the gotchas
 fixtures/     The sample PDFs, the manifest and the expected fields
+infra/        Terraform for Google Cloud: Cloud Run, Cloud SQL, Memorystore, Cloud Storage, Secret Manager
+scripts/      chaos.sh, and build-images.sh and run-migrate.sh for the cloud deploy
 ```
 
 **Why this split**
@@ -296,7 +299,7 @@ An extraction uses about 1,100 input and 260 output tokens, roughly one cent.
 
 ## Tests
 
-**104 tests**, placed where breakage would be silent or expensive.
+**120 tests**, placed where breakage would be silent or expensive.
 
 | Package | Runs against | Covers |
 |---|---|---|
@@ -319,6 +322,123 @@ They use their own database and Redis database, because the compose worker would
 
 ---
 
+## Deployment
+
+The same api, worker and migrate-seed images that run in `docker compose` run on Google Cloud, provisioned by Terraform in [`infra/`](infra).
+The review UI is on Vercel.
+
+| | URL |
+|---|---|
+| **Review UI** | https://lomi-review-pi.vercel.app |
+| API | https://api-pqoxlls5ja-el.a.run.app (`GET /health` shows version and queue counts) |
+
+```mermaid
+flowchart LR
+  browser([Browser]) -->|HTTPS| vercel[Vercel<br>review UI]
+  browser -->|HTTPS, CORS| api[Cloud Run<br>api]
+  worker[Cloud Run worker pool<br>worker]
+  subgraph vpc[VPC, private services access, no NAT]
+    sql[(Cloud SQL<br>Postgres 18)]
+    redis[(Memorystore<br>Redis 7.2)]
+  end
+  api -->|Direct VPC egress| sql
+  api --> redis
+  worker --> sql
+  worker --> redis
+  api -->|JSON API, service account| gcs[(Cloud Storage<br>PDFs)]
+  worker --> gcs
+  worker -->|HTTPS| anthropic[Anthropic API]
+  secrets[Secret Manager] -.->|secret env vars| api
+  secrets -.-> worker
+```
+
+| Piece | Google Cloud service |
+|---|---|
+| API | Cloud Run service with its own HTTPS URL; the startup probe is `/health/live` |
+| Worker | Cloud Run worker pool, 1 instance, no HTTP endpoint |
+| Migrate + seed | Cloud Run job from the api image, run before the services start |
+| Postgres | Cloud SQL Postgres 18, `db-f1-micro`, private IP only, TLS required |
+| Redis | Memorystore Redis 7.2, basic 1 GB, private IP only, `maxmemory-policy noeviction` as BullMQ requires |
+| PDFs | Cloud Storage bucket, public access prevented, reached as the service account (no key) |
+| Secrets | Secret Manager, as Cloud Run secret environment variables |
+| Images | Artifact Registry, built for `linux/amd64` by Cloud Build |
+| Logs | Cloud Logging |
+| Web | Vercel |
+
+Cloud Run reaches Cloud SQL and Memorystore through Direct VPC egress; everything else goes straight out, so there is no NAT gateway.
+Neither database has a public IP.
+The api's startup probe is `/health/live`, which answers whenever the process does; `/health` answers `503` while Postgres or Redis is down, and replacing the api would not fix that, so uploads keep working while Redis is down.
+
+### Deploy
+
+Once per project (any project with billing linked works):
+
+```bash
+gcloud projects create <project-id>
+gcloud billing projects link <project-id> --billing-account=<billing-account-id>
+gcloud auth application-default login
+```
+
+Then, and for every redeploy from step 2:
+
+```bash
+export TF_VAR_project_id=<project-id> TF_VAR_anthropic_api_key=sk-ant-...
+tag=$(git describe --always --dirty)
+terraform -chdir=infra init
+terraform -chdir=infra apply                                                  # 1. network, databases, bucket, secrets, registry
+scripts/build-images.sh                                                       # 2. Cloud Build, linux/amd64, tagged $tag
+terraform -chdir=infra apply -var image_tag=$tag -var start_services=false    # 3. the migrate job, services down
+scripts/run-migrate.sh                                                        # 4. migrations and the seed, then its logs
+terraform -chdir=infra apply -var image_tag=$tag -var web_origin=https://<vercel-domain>   # 5. api and worker
+```
+
+Taking the services down for step 4 means migrations always run before new code serves requests.
+
+The web app builds with the API's URL baked in (`apps/web/vercel.json` holds the build settings, the SPA fallback and the cache headers):
+
+```bash
+vercel link --cwd apps/web
+VITE_API_URL=$(terraform -chdir=infra output -raw api_url) vercel build --prod --cwd apps/web
+vercel deploy --prebuilt --prod --cwd apps/web
+```
+
+### How secrets flow
+
+Terraform generates the database password and writes `DATABASE_URL` and `ANTHROPIC_API_KEY` to Secret Manager.
+Cloud Storage needs no secret at all: the apps use the service account's short-lived token from the metadata server.
+Cloud Run revisions name only the secrets; Cloud Run resolves them when an instance starts and sets them as environment variables inside the container, with access granted to the app's service account alone.
+They never appear in a revision's plain environment, in the logs or in the repository.
+The local Terraform state does hold them, so `infra/.gitignore` keeps state and `*.tfvars` out of git.
+
+### Why the cloud runs the same stack
+
+The images, entry points and environment schemas are the ones compose runs, so what the chaos script proves locally is what runs in the cloud.
+The differences are configuration: `GCS_BUCKET` instead of MinIO's `S3_BUCKET` (the one place the code branches, behind the same `putObject`/`getObject` functions), and one allowed CORS origin instead of nginx's same-origin `/api`.
+Pub/Sub or Cloud Functions would replace the lease, heartbeat and reconciler design under test with a different system, and a single long-running worker gains nothing from functions.
+The first attempt ran on AWS (ECS Fargate); that account was under an AWS security hold that blocked ECS, so it moved to Google Cloud ([spec 010](spec/010-cloud-deployment.md)).
+
+### Checked in the cloud
+
+Run against the deployed stack on 2026-11-28; [spec 010](spec/010-cloud-deployment.md) has the details.
+
+| Check | Result |
+|---|---|
+| The seeded documents | The migrate job applied 4 migrations and seeded 3 documents; the worker extracted them, and the Vercel UI lists them over HTTPS. |
+| Upload the v2 invoice | With v1's 5 values approved, v2 came back with exactly 2 pending and 3 carried over. |
+| Stop the worker mid-extraction | The document completed. Cloud Run gives a stopped container 10 seconds, and the 3-second extraction finished inside them; a hard kill mid-extraction is what `scripts/chaos.sh` does locally. |
+| Flush Redis | With the worker down and a job waiting, `FLUSHALL` from inside the VPC emptied the queue; the restarted worker's reconciler re-enqueued the version from Postgres and extracted it. |
+| Secrets | The api, worker and migrate job carry `DATABASE_URL` and `ANTHROPIC_API_KEY` only as Secret Manager references; 731 log entries contain neither. |
+
+### Cost and teardown
+
+About $3 to $4 a day, mostly Memorystore, the always-on worker and Cloud SQL.
+
+```bash
+terraform -chdir=infra destroy -var image_tag=none
+```
+
+---
+
 ## What I cut, and what is next
 
 | Cut on purpose | What it means today |
@@ -329,14 +449,13 @@ They use their own database and Redis database, because the compose worker would
 | Normalising dates and amounts before comparing versions | `$5,230.29` and `5230.29` count as a change. |
 | Cleanup of orphaned objects | A failed upload transaction can leave its PDF in MinIO. |
 | Backoff between crash attempts, metrics beyond `/health` | Crashes retry at once; health is the only signal. |
-| CI and a deployment | Everything is verified locally. |
+| CI | Everything is verified locally, and deploys run from a laptop. |
 
 **Next, in order:**
 
 1. Reviewer identity on reviews.
-2. CI running the turbo pipeline against service containers.
-3. A deployment: Cloud Run or ECS, managed Postgres and Redis, S3 or GCS.
-4. The scale work below.
+2. CI running the turbo pipeline against service containers, and deploying on merge.
+3. The scale work below.
 
 ---
 
