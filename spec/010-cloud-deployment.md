@@ -60,6 +60,7 @@ The resilience behaviors from spec 007 (a killed worker, a flushed Redis) hold i
    A redeploy is steps 2 to 5.
 8. **Web on Vercel.** `apps/web/vercel.json` rewrites every path to `index.html` and sets `immutable` on `/assets/`.
    The bundle is built with `VITE_API_URL=<api url>`; the api runs with `WEB_ORIGIN=<vercel url>`.
+   The Vercel project is connected to the GitHub repository with its Root Directory set to `apps/web`, so every push to `main` deploys the web app; `VITE_API_URL` comes from the project's production environment.
 9. **Documentation.** The root `README.md` gets a Deployment section: a diagram, the deploy steps, how secrets flow, why the cloud runs the same images, why not a managed queue or functions, the costs and `terraform destroy`.
 
 ## Out of scope
@@ -67,7 +68,8 @@ The resilience behaviors from spec 007 (a killed worker, a flushed Redis) hold i
 - A custom domain (Cloud Run's `*.run.app` URL has a certificate).
 - Remote Terraform state (local in `infra/`, gitignored; it holds secrets).
 - Autoscaling the worker, high availability for Cloud SQL or Memorystore, backups beyond the defaults.
-- CI/CD; deploys run from the developer's machine.
+- CI/CD for the api and worker; their deploys run from the developer's machine.
+  Only the web app deploys on its own, from `main` through Vercel's Git integration.
 
 ## Design notes
 
@@ -91,6 +93,12 @@ Verified on 2026-11-28 against project `lomi-review-1128` (api `https://api-pqox
 - [x] Cloud: the worker pool scaled to 0 one second after extraction began, then back to 1; the document completed. The logs show the extraction finished (3 seconds) before `SIGTERM` arrived, inside Cloud Run's 10-second grace, so this exercised the graceful path. Cloud Run cannot SIGKILL an instance on demand, so the lease-expiry path stays covered by `scripts/chaos.sh` and the resilience tests.
 - [x] Cloud: with the worker at 0, an upload's job waited in Redis (`waiting: 1`); the migrate job with its arguments overridden ran `FLUSHALL` (`OK`, `waiting: 0`, the version still `queued` in Postgres); on restart the worker logged `reconciler: re-enqueued 1 version` and extracted it.
 - [x] Cloud: the api, worker pool and migrate job carry `DATABASE_URL` and `ANTHROPIC_API_KEY` only as Secret Manager references; 731 log entries from the 2 hours of the deploy contain neither the database password, the key, nor `sk-ant`.
+
+Redeployed on 2026-11-28 from `main` at `00854dd` (specs 011 and 012), as steps 2 to 5 with images built from a clean worktree of `origin/main`.
+The migrate job applied `20261128120000_soft_delete_documents`, and the api kept its URL.
+The api answers `DELETE /documents/:id` with JSON, and its preflight allows `DELETE` from the Vercel origin.
+The first Git-triggered Vercel build failed with `No Output Directory named "public"`, because the project's Root Directory was empty and the build ran at the repository root without `apps/web/vercel.json`.
+With the Root Directory set to `apps/web`, `main` built on Vercel (pnpm 12, only `@lomi/web`) and serves the list and document pages from the cloud api.
 
 ## Open questions
 
