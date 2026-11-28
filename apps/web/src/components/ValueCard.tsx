@@ -160,17 +160,20 @@ export function ValueCard({
             <CorrectForm value={value} documentId={documentId} onDone={() => setCorrecting(false)} onSaved={onReviewed} />
           ) : (
             <div className="flex gap-2">
-              <Button
-                // Black only where a review is still needed, so the page has one kind of primary action.
-                variant={value.reviewStatus === 'pending' ? 'default' : 'outline'}
-                size="lg"
-                className="px-4"
-                disabled={review.isPending}
-                onClick={() => review.mutate({ valueId: value.id, documentId, input: { action: 'approve' } }, { onSuccess: onReviewed })}
-              >
-                <Check aria-hidden />
-                Approve
-              </Button>
+              {/* Approving an approved value again changes nothing (the API drops the repeat). */}
+              {value.reviewStatus !== 'approved' && (
+                <Button
+                  // Black only where a review is still needed, so the page has one kind of primary action.
+                  variant={value.reviewStatus === 'pending' ? 'default' : 'outline'}
+                  size="lg"
+                  className="px-4"
+                  disabled={review.isPending}
+                  onClick={() => review.mutate({ valueId: value.id, documentId, input: { action: 'approve' } }, { onSuccess: onReviewed })}
+                >
+                  <Check aria-hidden />
+                  Approve
+                </Button>
+              )}
               <Button size="lg" variant="outline" className="px-4" disabled={review.isPending} onClick={() => setCorrecting(true)}>
                 <Pencil aria-hidden />
                 Correct

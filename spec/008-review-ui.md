@@ -81,7 +81,8 @@ The UI follows the user's "Lomi Labs" design system: calm, spacious, flat, with 
 6. Status badges are small white chips with a colored dot (review statuses amber, green, purple; extracted green); a failed status stays a red tint, so it is never missed.
 7. Spacing uses the design's scale (6, 16, 28, 40, 56 px), within a centered page of fixed maximum width.
 8. Only theme tokens change in `src/components/ui`; everything else is classes where the components are used.
-9. Approve is the black primary action only on a pending value; on a reviewed or carried-over value it is outlined, so the page has one kind of primary action.
+9. Approve is the black primary action only on a pending value; on a corrected or carried-over value it is outlined, so the page has one kind of primary action.
+   An approved value shows only Correct, since approving it again would change nothing (user's call, 2026-11-28).
 10. On phones the document list shows the title, with the review counts under it, and the status; type, version and the progress bar need a wider screen.
 
 ## Out of scope

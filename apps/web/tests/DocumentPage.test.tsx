@@ -56,6 +56,9 @@ describe('document page', () => {
     await user.click(within(due).getByRole('button', { name: 'Approve' }))
     expect(await within(due).findByText('Approved', { selector: '[data-slot="badge"]' })).toBeVisible()
     expect(posts).toEqual([{ action: 'approve' }])
+    // An approved value can still be corrected, but not approved again.
+    expect(within(due).queryByRole('button', { name: 'Approve' })).toBeNull()
+    expect(within(due).getByRole('button', { name: 'Correct' })).toBeVisible()
   })
 
   it('polls while the version is extracting and stops once it is extracted', async () => {
