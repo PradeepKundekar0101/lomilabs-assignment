@@ -92,4 +92,23 @@ describe("validateEvidence against the fixture text", () => {
     expect(v!.evidence).toBe("The initial term of this Lease shall be twenty-four (24)\nmonths");
     expect(lease.slice(v!.evidenceStart!, v!.evidenceEnd!)).toBe(v!.evidence);
   });
+
+  it("rejects a quote shorter than 6 characters after normalising, even one that is in the text", () => {
+    const { values } = validateEvidence(invoice, fields("invoice_number", "total_amount", "terms"), [
+      llm("invoice_number", "0847", " 0847 "),
+      llm("total_amount", "$5", "$5\n"),
+      llm("terms", "Net 30", "Net\n30"),
+    ]);
+    expect(values.map((v) => [v.fieldKey, v.value, v.gapReason])).toEqual([
+      ["invoice_number", null, "evidence_too_short"],
+      ["total_amount", null, "evidence_too_short"],
+      ["terms", "Net 30", null],
+    ]);
+  });
+
+  it("accepts a quote that appears more than once, at its first match", () => {
+    const [v] = validateEvidence(invoice, fields("delivery"), [llm("delivery", "$275.00", "$275.00")]).values;
+    expect(invoice.split("$275.00")).toHaveLength(3);
+    expect(v).toMatchObject({ value: "$275.00", evidenceStart: invoice.indexOf("$275.00"), gapReason: null });
+  });
 });

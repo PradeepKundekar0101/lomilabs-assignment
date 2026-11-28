@@ -260,7 +260,7 @@ For each field, the new value is compared with the same field in the latest earl
 It is **unchanged** when both hold:
 
 1. the model's value is the same, ignoring whitespace, and
-2. its evidence is the same quote, or the **old quote still appears in the new version's text**.
+2. its evidence is the same quote, or the **old quote still appears in the new version's text** and is at least 6 characters long (a shorter one proves nothing).
 
 A gap that is still a gap is unchanged too.
 An unchanged value gets the previous review copied forward and is `carried_over`; anything else is `pending`, with the previous value and review shown beside it.
@@ -288,6 +288,7 @@ The parsed text is stored per version rather than re-parsed, so the evidence off
 ### Evidence validation
 
 - Each quote must appear in the version's parsed text, ignoring only whitespace differences, since PDF text extraction and the model rarely agree on line breaks.
+- A quote shorter than 6 characters after collapsing whitespace (like `2025` or `$5`) can match anywhere, so it becomes a gap with reason `evidence_too_short`; a longer quote that appears more than once is kept at its first match.
 - The stored evidence is then the exact slice of the parsed text, with its offsets.
 - The value must also appear inside its own quote (case-sensitive, whitespace collapsed, no number or date parsing), or the field becomes a gap with reason `value_not_in_evidence`; the model's claimed value and quote stay in the run's raw response.
 - A quote that is not there becomes a gap with reason `evidence_not_found`; a field the model skipped becomes `missing_from_llm_output`; a field the model could not find keeps the model's reason.
