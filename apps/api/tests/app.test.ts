@@ -1,8 +1,9 @@
 import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
-import { createApp, type AppDeps } from "../src/app.js";
-import { StorageUnavailableError, VersionRejectedError } from "../src/create-version.js";
+import { createApp } from "../src/app.js";
+import { StorageUnavailableError, VersionRejectedError } from "../src/errors.js";
+import type { AppDeps } from "../src/types/app.js";
 
 const fail = async () => {
   throw new Error("down");
@@ -87,19 +88,25 @@ describe("POST /documents", () => {
   });
 
   it("rejects invalid uploads with 400 before calling createVersion", async () => {
-    const cases = [
-      form("lease", new File(["hello"], "notes.pdf")), // not a PDF
-      form("memo", pdf()), // unknown type
-      form(null, pdf()), // missing type
-      form("lease", null), // missing file
-      form("lease", pdf(10 * 1024 * 1024)), // just over 10 MB
-      form("lease", pdf(11 * 1024 * 1024)), // over the body cap
+    const badType = "type must be one of invoice, lease, market_report";
+    const cases: [FormData, string][] = [
+      [form("lease", new File(["hello"], "notes.pdf")), "file is not a PDF"],
+      [form("memo", pdf()), badType],
+      [form(null, pdf()), badType],
+      [form("memo", new File(["hello"], "notes.pdf")), badType], // the type is checked first
+      [form("lease", null), "file is required"],
+      [form("lease", pdf(10 * 1024 * 1024)), "file must be at most 10 MB"], // just over 10 MB
+      [form("lease", pdf(11 * 1024 * 1024)), "file must be at most 10 MB"], // over the body cap
     ];
-    for (const body of cases) {
+    for (const [body, error] of cases) {
       const r = await upload(body);
-      expect(r.status).toBe(400);
-      expect(r.calls).toEqual([]);
+      expect(r).toEqual({ status: 400, body: { error }, calls: [] });
     }
+  });
+
+  it("rejects a malformed multipart body with 400", async () => {
+    const r = await request("/documents", { method: "POST", headers: { "content-type": "multipart/form-data; boundary=x" }, body: "not multipart" });
+    expect(r).toEqual({ status: 400, body: { error: "malformed multipart body" } });
   });
 
   it("rejects a body that is not multipart with 415", async () => {
@@ -208,6 +215,17 @@ describe("POST /values/:id/review", () => {
     for (const body of cases) expect((await post(JSON.stringify(body))).status, JSON.stringify(body)).toBe(400);
     expect((await post("{not json")).status).toBe(400);
     expect((await post("action=approve", "application/x-www-form-urlencoded")).status).toBe(400);
+  });
+
+  it("returns 404 for a value id that is not a uuid", async () => {
+    const r = await request("/values/not-a-uuid/review", { method: "POST", headers: { "content-type": "application/json" }, body: '{"action":"approve"}' });
+    expect(r).toEqual({ status: 404, body: { error: "value not found" } });
+  });
+
+  it("answers an oversized JSON body with 413, not the upload's file-size message", async () => {
+    const r = await post(JSON.stringify({ action: "approve", note: "x".repeat(200 * 1024) }));
+    expect(r.status).toBe(413);
+    expect(r.body.error).not.toMatch(/file/);
   });
 
   it("accepts a note of exactly 1000 characters", async () => {

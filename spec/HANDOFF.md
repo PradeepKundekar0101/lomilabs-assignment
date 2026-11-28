@@ -16,8 +16,8 @@ Monorepo: pnpm 12 workspaces + turbo, TypeScript 7, Node 26, vitest, oxlint.
 
 | Path | What |
 |------|------|
-| `apps/api` | Express 5 API. `POST /documents` (multipart upload), `POST /documents/:id/versions` (a new version of a document), `GET /documents`, `GET /documents/:id` (with the current version's values), `GET /documents/:id/versions/:n`, `GET /documents/:id/progress`, `POST /documents/:id/retry`, `POST /values/:id/review`, `GET /health` (with version and queue counts). Also the seed (`src/seed.ts`). |
-| `apps/worker` | BullMQ worker on queue `extraction`: claim with a heartbeat-renewed lease, parse, LLM, evidence check, commit (`src/extract.ts`); a reconciler re-enqueues from Postgres whatever Redis lost (`src/reconciler.ts`). |
+| `apps/api` | Express 5 API. `POST /documents` (multipart upload), `POST /documents/:id/versions` (a new version of a document), `GET /documents`, `GET /documents/:id` (with the current version's values), `GET /documents/:id/versions/:n`, `GET /documents/:id/progress`, `POST /documents/:id/retry`, `POST /values/:id/review`, `GET /health` (with version and queue counts). Also the seed (`src/seed.ts`). Layered since spec 009: `routes/` map paths to `controllers/`, which validate with `schemas/` (zod) and call `services/`; types live in `types/`, `HttpError` and the domain errors in `errors.ts`, the clients in `infra.ts`. |
+| `apps/worker` | BullMQ worker on queue `extraction`: claim with a heartbeat-renewed lease, parse, LLM, evidence check, commit (`src/extract.ts`); a reconciler re-enqueues from Postgres whatever Redis lost (`src/reconciler.ts`). Env and job data are parsed with zod (`src/schemas/`); types are in `src/types/`. |
 | `apps/web` | The review UI (spec 008): Vite, React, TanStack Query, React Router, Tailwind v4, shadcn/ui. `/` lists documents, `/documents/:id` reviews one. Served by nginx, which proxies `/api/*` to the api with the prefix stripped. See `apps/web/README.md`. |
 | `packages/db` | Prisma 7 schema, migrations, `createDb()` client. |
 | `packages/shared` | Zod schemas of the API's responses and the review input, used by the api and parsed by the web app (spec 008). |
@@ -60,6 +60,7 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the o
 | 006 Seed the fixture documents | Done and verified in docker (`down -v`, `up`, `restart`), merged (PR #2). |
 | 007 Extraction resilience (lease heartbeat, reconciler, attempt cap, retry, health counts) | Done and verified (integration tests, `scripts/chaos.sh`, retry and Redis-down checks in docker), merged (PR #4). |
 | 008 Review UI | Revision 2 (the Lomi Labs design system) done and verified (component tests with MSW, api integration, E2E in docker through nginx), merged (PR #7). The 2026-11-28 submission check added fixes (list order, stale toast, readable model errors, nginx cache headers) and the root `README.md`, also in PR #7. |
+| 009 API layers and validated boundaries | Done on branch `api-layers` (off `tests-folder`, PR #10); verified by the full turbo check with Postgres and Redis. The docker E2E was skipped at the user's request: the rebuilt api, worker and migrate-seed images exist but have not been run, and the 2026-11-28 build filled the disk (Docker restarted, build cache not yet pruned). |
 
 Draft specs contain assumptions and open questions; confirm them with the user before implementing.
 
@@ -140,3 +141,6 @@ The api service has no healthcheck, so `docker compose up --wait` returns before
 - Be picky about UI when testing end to end.
 - Commit or push only when asked; branch off `main` first.
 33. **Tests live in each package's `tests/` folder, not in `src`.** `tsconfig.json` typechecks `src` and `tests`; `tsconfig.build.json` emits only `src` (`rootDir: "src"`, so `dist/main.js` keeps its path). Lint scripts cover both folders. Tests import source as `../src/<module>.js`; the web tests use the `@/` alias.
+34. **The api's layers (spec 009).** Routes only map paths; a controller validates with `validate(schema, input, toError)` and throws `HttpError`, which `middleware/error-handler.ts` turns into `{ error, ...details }`; services never import express. Each param, form or body schema keeps the route's old status and message (a bad id is a 404, not a 400), so add new inputs the same way. Interfaces and types go in `types/`, never next to the code, and zod-inferred types are re-exported there.
+35. **Only the multipart parser maps an oversized body to `400 file must be at most 10 MB`.** It does so with an error handler inside the route's middleware chain (`middleware/multipart.ts`); any other oversized body keeps body-parser's `413`.
+36. **Every entry point parses its environment with zod** (`loadEnv` in `schemas/env.schema.ts`, in both apps), so a missing variable stops startup with all problems listed. Add new variables to the schema, not to `process.env` reads.
