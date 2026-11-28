@@ -42,7 +42,8 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the o
 - The `review-api` branch is fully merged; do not add to it.
 - PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/6 (spec 005) was merged into `main` on 2026-11-27 as `30ca9f1`.
 - The `new-versions` branch is fully merged; do not add to it.
-- Branch `review-ui` (off `main` at `30ca9f1`) holds spec 008.
+- PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/7 (spec 008 revisions 1 and 2, the root `README.md` and the submission-check fixes) was merged into `main` on 2026-11-28 as `81db5a9`.
+- The `review-ui` branch is fully merged; do not add to it.
 - New work: branch off `main` and open a PR.
 - Commits must be authored as `pradeepkundekar0101 <91021094+PradeepKundekar0101@users.noreply.github.com>`. The repo-local git config sets this; the machine's global identity is a different account.
 - The repo has no CI. Verification is local only.
@@ -58,7 +59,7 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the o
 | 005 New versions and carry-over | Revision 2 done and verified (unit, integration against Postgres, E2E in docker with the real model), merged (PR #6). |
 | 006 Seed the fixture documents | Done and verified in docker (`down -v`, `up`, `restart`), merged (PR #2). |
 | 007 Extraction resilience (lease heartbeat, reconciler, attempt cap, retry, health counts) | Done and verified (integration tests, `scripts/chaos.sh`, retry and Redis-down checks in docker), merged (PR #4). |
-| 008 Review UI | Revision 2 (the Lomi Labs design system) done and verified (component tests with MSW, api integration, E2E in docker through nginx), in review as PR #7 on branch `review-ui`. The 2026-11-28 submission check added fixes (list order, stale toast, readable model errors, nginx cache headers) and the root `README.md`, uncommitted. Reviewers clone `main`, so PR #7 must be merged before the deadline. |
+| 008 Review UI | Revision 2 (the Lomi Labs design system) done and verified (component tests with MSW, api integration, E2E in docker through nginx), merged (PR #7). The 2026-11-28 submission check added fixes (list order, stale toast, readable model errors, nginx cache headers) and the root `README.md`, also in PR #7. |
 
 Draft specs contain assumptions and open questions; confirm them with the user before implementing.
 
@@ -89,7 +90,7 @@ The spec 004 E2E left reviews on two non-fixture documents, `c7dfe635…` and `d
 The api and web images were rebuilt from the `review-ui` branch on 2026-11-27.
 The spec 008 E2E reviewed the non-fixture lease `7e2309bf…` (2 approves, 1 correction) and uploaded `broken-e2e.pdf` (`5e3ee4ab…`, two versions, both `failed` on purpose); `doc-invoice-001` was only viewed.
 On 2026-11-28 the stack was rebuilt from empty volumes from a fresh clone with `.env.example` (`down -v --rmi local`, then `up`; about 8 minutes with the build cache warm), and the brief's checks were run against it: the results are in the root `README.md`'s failure table.
-The worker and web images were then rebuilt from the working tree, and the stack recreated from this checkout; it holds 32 extracted versions (one superseded), `doc-invoice-001` at v3 (v1 fully reviewed, v2 and v3 with 2 pending each), and 3 reviews on `doc-lease-001`.
+The worker and web images were then rebuilt from what became `bb47aaa`, and the stack recreated from this checkout; it holds 32 extracted versions (one superseded), `doc-invoice-001` at v3 (v1 fully reviewed, v2 and v3 with 2 pending each), and 3 reviews on `doc-lease-001`.
 The root `README.md` is the brief's required README: every claim in it was observed on 2026-11-28; re-check the claims if behavior changes.
 The api service has no healthcheck, so `docker compose up --wait` returns before it listens; give it a second before the first request.
 
