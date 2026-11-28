@@ -28,6 +28,7 @@ Every feature starts as a numbered spec in this folder, and code follows the spe
 | 011 | [Delete documents](011-delete-documents.md) | Done (merged in [PR #14](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/14)) |
 | 012 | [Light backdrop and page headers](012-light-backdrop-and-page-headers.md) | Done (merged in [PR #15](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/15)) |
 | 013 | [Extraction eval](013-extraction-eval.md) | Done (verified 2026-11-28; in [PR #16](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/16), not merged yet) |
+| 014 | [Evidence hardening and CI](014-evidence-hardening.md) | Approved |
 
 ## Template
 

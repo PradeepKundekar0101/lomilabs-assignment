@@ -117,6 +117,22 @@ describe.skipIf(!url)("processVersion against Postgres", () => {
     expect(runs[0]!.finishedAt).not.toBeNull();
   });
 
+  it("stores a gap when the model's value is not in its own quote", async () => {
+    const { versionId } = await seedInvoice();
+    const mismatched = invoiceAnswer.map((f) => (f.key === "total_amount" ? { ...f, value: "$9,999.00" } : f));
+    expect(await processVersion(deps({ llm: fakeLlm(mismatched) }), versionId)).toBe("extracted");
+
+    const { values } = await state(versionId);
+    expect(values.find((v) => v.fieldKey === "total_amount")).toMatchObject({
+      value: null,
+      evidence: null,
+      evidenceStart: null,
+      evidenceEnd: null,
+      gapReason: "value_not_in_evidence",
+    });
+    expect(values.filter((v) => v.gapReason === null)).toHaveLength(4);
+  });
+
   it("does nothing when the same job runs again", async () => {
     const { versionId } = await seedInvoice();
     expect(await processVersion(deps(), versionId)).toBe("extracted");

@@ -289,6 +289,7 @@ The parsed text is stored per version rather than re-parsed, so the evidence off
 
 - Each quote must appear in the version's parsed text, ignoring only whitespace differences, since PDF text extraction and the model rarely agree on line breaks.
 - The stored evidence is then the exact slice of the parsed text, with its offsets.
+- The value must also appear inside its own quote (case-sensitive, whitespace collapsed, no number or date parsing), or the field becomes a gap with reason `value_not_in_evidence`; the model's claimed value and quote stay in the run's raw response.
 - A quote that is not there becomes a gap with reason `evidence_not_found`; a field the model skipped becomes `missing_from_llm_output`; a field the model could not find keeps the model's reason.
 - `packages/core/tests/evidence.test.ts` proves a hallucinated quote becomes a gap.
 
