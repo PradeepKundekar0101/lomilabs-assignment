@@ -15,14 +15,15 @@ export async function listDocuments(db: PrismaClient): Promise<DocumentListItem[
     FROM documents d
     LEFT JOIN document_versions v ON v.id = d.current_version_id
     LEFT JOIN extracted_values ev ON ev.version_id = v.id
+    WHERE d.deleted_at IS NULL
     GROUP BY d.id, v.id
     ORDER BY d.created_at DESC`;
 }
 
-/** A document with one version's values: the current version, or version `versionNo`. Null when either is missing. */
+/** A document with one version's values: the current version, or version `versionNo`. Null when either is missing, or the document is deleted. */
 export async function getDocumentView(db: PrismaClient, fields: ExpectedFields, documentId: string, versionNo?: number) {
   const doc = await db.document.findUnique({
-    where: { id: documentId },
+    where: { id: documentId, deletedAt: null },
     select: { id: true, title: true, type: true, createdAt: true, currentVersion: { select: versionSelect } },
   });
   if (!doc) return null;
@@ -37,7 +38,7 @@ export async function getDocumentView(db: PrismaClient, fields: ExpectedFields, 
   return { ...doc, version, values: sortForReview(values.map(toValueView), fields[doc.type]) };
 }
 
-/** Review counts for the document's current version, in one query. Null for an unknown document. */
+/** Review counts for the document's current version, in one query. Null for an unknown or deleted document. */
 export async function getDocumentProgress(db: PrismaClient, documentId: string): Promise<Progress | null> {
   const [progress] = await db.$queryRaw<Progress[]>`
     SELECT v.version_no AS "versionNo", v.status::text AS status,
@@ -50,7 +51,24 @@ export async function getDocumentProgress(db: PrismaClient, documentId: string):
     FROM documents d
     LEFT JOIN document_versions v ON v.id = d.current_version_id
     LEFT JOIN extracted_values ev ON ev.version_id = v.id
-    WHERE d.id = ${documentId}
+    WHERE d.id = ${documentId} AND d.deleted_at IS NULL
     GROUP BY v.id`;
   return progress ?? null;
+}
+
+/** Soft-deletes a document and stops its extraction (spec 011). False for an unknown or already deleted document. */
+export async function deleteDocument(db: PrismaClient, documentId: string): Promise<boolean> {
+  return db.$transaction(async (tx) => {
+    // The lock uploads, reviews and the worker's commit take: none of them interleaves with the delete.
+    const [doc] = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM documents WHERE id = ${documentId} AND deleted_at IS NULL FOR UPDATE`;
+    if (!doc) return false;
+    await tx.document.update({ where: { id: documentId }, data: { deletedAt: new Date() } });
+    // Not claimable any more; a worker mid-attempt finds the document deleted at its next check and writes nothing.
+    await tx.documentVersion.updateMany({
+      where: { documentId, status: { in: ["queued", "extracting"] } },
+      data: { status: "superseded", leaseUntil: null },
+    });
+    return true;
+  });
 }

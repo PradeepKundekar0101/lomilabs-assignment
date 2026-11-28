@@ -29,7 +29,7 @@ export async function createVersion(deps: CreateVersionDeps, target: VersionTarg
       const [doc] = await tx.$queryRaw<{ id: string; current_sha256: string | null }[]>`
         SELECT d.id, v.sha256 AS current_sha256
         FROM documents d LEFT JOIN document_versions v ON v.id = d.current_version_id
-        WHERE d.id = ${target.documentId}
+        WHERE d.id = ${target.documentId} AND d.deleted_at IS NULL
         FOR UPDATE OF d`;
       if (!doc) throw new VersionRejectedError("document_not_found");
       if (doc.current_sha256 === sha256) throw new VersionRejectedError("identical_to_current");

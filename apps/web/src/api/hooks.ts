@@ -11,6 +11,7 @@ import {
 } from '@lomi/shared'
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { z } from 'zod'
 import { isInFlight } from '@/lib/review'
 import { api, ApiError } from './client'
 
@@ -106,6 +107,21 @@ export function useReview() {
         return invalidate(client, documentId)
       }
       toast.error(`Review not saved: ${err.message}`)
+    },
+  })
+}
+
+/** Deletes a document (spec 011); the row leaves the list at once. */
+export function useDeleteDocument() {
+  const client = useQueryClient()
+  return useMutation({
+    // 204: no body, which the client reads as null.
+    mutationFn: ({ id }: { id: string; title: string }) => api(`/documents/${id}`, z.null(), { method: 'DELETE' }),
+    onSuccess: (_none, { id, title }) => {
+      // Here, not in the caller: a deleted list row unmounts before a mutate() callback would run.
+      toast.success(`${title} deleted`)
+      client.setQueryData<DocumentListItem[]>(queryKeys.documents, (docs) => docs?.filter((d) => d.id !== id))
+      return client.invalidateQueries({ queryKey: queryKeys.documents })
     },
   })
 }

@@ -1,9 +1,10 @@
 import type { DocumentView, Value } from '@lomi/shared'
-import { ArrowLeft, RotateCw } from 'lucide-react'
+import { ArrowLeft, RotateCw, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { ApiError } from '@/api/client'
 import { useDocument, useProgress, useRetry } from '@/api/hooks'
+import { DeleteDialog } from '@/components/DeleteDialog'
 import { StatusBadge } from '@/components/StatusBadge'
 import { UploadDialog } from '@/components/UploadDialog'
 import { ValueCard } from '@/components/ValueCard'
@@ -63,6 +64,7 @@ function ProgressLine({ id }: { id: string }) {
 
 function Header({ doc, onVersion }: { doc: DocumentView; onVersion: (versionNo: number | undefined) => void }) {
   const retry = useRetry(doc.id)
+  const navigate = useNavigate()
   const current = doc.currentVersion
   const version = doc.version
   const isCurrent = version?.versionNo === current?.versionNo
@@ -92,7 +94,21 @@ function Header({ doc, onVersion }: { doc: DocumentView; onVersion: (versionNo: 
           <StatusBadge status={version?.status ?? null} error={version?.error} />
         </CardDescription>
         <CardAction className="max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:mt-4 max-sm:justify-self-start">
-          <UploadDialog documentId={doc.id} />
+          <div className="flex flex-wrap gap-2">
+            <UploadDialog documentId={doc.id} />
+            <DeleteDialog
+              id={doc.id}
+              title={doc.title}
+              onDeleted={() => navigate('/')}
+              trigger={
+                // Icon only on phones, so it shares a row with the upload button.
+                <Button variant="outline" size="lg" className="h-10.75 px-5 text-destructive hover:text-destructive max-sm:w-10.75 max-sm:px-0">
+                  <Trash2 aria-hidden />
+                  <span className="max-sm:sr-only">Delete</span>
+                </Button>
+              }
+            />
+          </div>
         </CardAction>
       </CardHeader>
       <CardContent className="grid gap-4">

@@ -16,7 +16,7 @@ Monorepo: pnpm 12 workspaces + turbo, TypeScript 7, Node 26, vitest, oxlint.
 
 | Path | What |
 |------|------|
-| `apps/api` | Express 5 API. `POST /documents` (multipart upload), `POST /documents/:id/versions` (a new version of a document), `GET /documents`, `GET /documents/:id` (with the current version's values), `GET /documents/:id/versions/:n`, `GET /documents/:id/progress`, `POST /documents/:id/retry`, `POST /values/:id/review`, `GET /health` (with version and queue counts). Also the seed (`src/seed.ts`). Layered since spec 009: `routes/` map paths to `controllers/`, which validate with `schemas/` (zod) and call `services/`; types live in `types/`, `HttpError` and the domain errors in `errors.ts`, the clients in `infra.ts`. |
+| `apps/api` | Express 5 API. `POST /documents` (multipart upload), `POST /documents/:id/versions` (a new version of a document), `GET /documents`, `GET /documents/:id` (with the current version's values), `GET /documents/:id/versions/:n`, `GET /documents/:id/progress`, `POST /documents/:id/retry`, `DELETE /documents/:id` (soft delete, spec 011), `POST /values/:id/review`, `GET /health` (with version and queue counts). Also the seed (`src/seed.ts`). Layered since spec 009: `routes/` map paths to `controllers/`, which validate with `schemas/` (zod) and call `services/`; types live in `types/`, `HttpError` and the domain errors in `errors.ts`, the clients in `infra.ts`. |
 | `apps/worker` | BullMQ worker on queue `extraction`: claim with a heartbeat-renewed lease, parse, LLM, evidence check, commit (`src/extract.ts`); a reconciler re-enqueues from Postgres whatever Redis lost (`src/reconciler.ts`). Env and job data are parsed with zod (`src/schemas/`); types are in `src/types/`. |
 | `apps/web` | The review UI (spec 008): Vite, React, TanStack Query, React Router, Tailwind v4, shadcn/ui. `/` lists documents, `/documents/:id` reviews one. Served by nginx, which proxies `/api/*` to the api with the prefix stripped. See `apps/web/README.md`. |
 | `packages/db` | Prisma 7 schema, migrations, `createDb()` client. |
@@ -67,6 +67,7 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the o
 | 007 Extraction resilience (lease heartbeat, reconciler, attempt cap, retry, health counts) | Done and verified (integration tests, `scripts/chaos.sh`, retry and Redis-down checks in docker), merged (PR #4). |
 | 008 Review UI | Revision 2 (the Lomi Labs design system) done and verified (component tests with MSW, api integration, E2E in docker through nginx), merged (PR #7). The 2026-11-28 submission check added fixes (list order, stale toast, readable model errors, nginx cache headers) and the root `README.md`, also in PR #7. |
 | 009 API layers and validated boundaries | Done, merged (PR #11). Its images were rebuilt and run end to end with spec 010's compose check. |
+| 011 Delete documents | Done and verified (integration against Postgres, worker integration, component tests, E2E in docker), committed on branch `docs-pr12-merged`, not merged yet. Soft delete (`documents.deleted_at`); the cloud deployment does not have it yet, and deploying it needs the migrate job first. The same branch has spec 008 point 9: an approved value shows only Correct. |
 | 010 Cloud deployment | Revision 2 (Google Cloud) done and verified in the cloud and in compose, merged (PR #12). Live in project `lomi-review-1128` (`asia-south1`): api `https://api-pqoxlls5ja-el.a.run.app`, UI `https://lomi-review-pi.vercel.app`. Revision 1 (AWS) was destroyed. It costs about $3 to $4 a day until `terraform destroy`. |
 
 Draft specs contain assumptions and open questions; confirm them with the user before implementing.
@@ -101,6 +102,7 @@ On 2026-11-28 the stack was rebuilt from empty volumes from a fresh clone with `
 The worker and web images were then rebuilt from what became `bb47aaa`, and the stack recreated from this checkout; it holds 32 extracted versions (one superseded), `doc-invoice-001` at v3 (v1 fully reviewed, v2 and v3 with 2 pending each), and 3 reviews on `doc-lease-001`.
 The root `README.md` is the brief's required README: every claim in it was observed on 2026-11-28; re-check the claims if behavior changes.
 The api service has no healthcheck, so `docker compose up --wait` returns before it listens; give it a second before the first request.
+On 2026-11-28 all images were rebuilt from the spec 011 working tree; its E2E uploaded and then deleted `e2e-delete-list.pdf` (`a28ff0f7…`) and `e2e-delete-page.pdf` (`bb5721dc…`), which stay in Postgres with `deleted_at` set.
 
 ## Gotchas found so far (read these, they cost time)
 
@@ -160,4 +162,5 @@ The api service has no healthcheck, so `docker compose up --wait` returns before
 43. **AWS (spec 010 revision 1) is gone.** Account 480073428925 is on an AWS suspension warning (support case 179466845600789; its owner must secure it and reply by 2026-11-29); ECS refused every task and CloudFront needed verification. Everything there was destroyed. The CLI's `default` profile still points at it: do not deploy there.
 44. **zsh does not split unquoted variables,** so `for x in $list` runs once. Pipe into `while read -r x` instead.
 45. **Disk.** On 2026-11-28 the disk reached 514 MB free; `docker builder prune -f`, removing `infra/.terraform` (the AWS provider) and unused images freed 24 GB. Building images on Cloud Build keeps the laptop out of it.
+46. **`docker compose up -d --build` can leave the worker and web containers on their old images** (it happened twice on 2026-11-28, while the api and migrate-seed were recreated). After a build, compare `docker inspect lomi-<service>-1 --format '{{.Image}}'` with `docker image inspect lomi-<service> --format '{{.Id}}'`, and use `up -d --no-deps --force-recreate <services>` when they differ.
 
