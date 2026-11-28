@@ -1,6 +1,6 @@
 # 012 Light backdrop and page headers
 
-Status: Done (verified 2026-11-28; on branch `docs-pr12-merged`, on top of spec 011, not merged yet)
+Status: Done (verified 2026-11-28; in PR #15, not merged yet)
 Approved: 2026-11-28, the user asked for light images from the Super Visuals backgrounds library and layout improvements, and left the calls to Claude.
 Depends on: 008, 011
 

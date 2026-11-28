@@ -1,6 +1,6 @@
 # 011 Delete documents
 
-Status: Done (verified 2026-11-28; on branch `docs-pr12-merged`, not merged yet)
+Status: Done (verified 2026-11-28; merged in PR #14)
 Depends on: 001, 004, 005, 007, 008
 
 ## Goal

@@ -50,6 +50,8 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the o
 - PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/10 (tests folder) and PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/11 (spec 009) were merged into `main` on 2026-11-28 (`0ce591d`).
 - PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/12 (spec 010) was merged into `main` on 2026-11-28 as `7459f8f`.
 - The `cloud-deploy` branch is fully merged except the README's drawn cloud diagram, which went in through `docs-pr12-merged`; do not add to it.
+- PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/13 (the README's cloud diagram, spec 010 marked merged) and PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/14 (spec 011 and spec 008 point 9) were merged into `main` on 2026-11-28 from `docs-pr12-merged`.
+- PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/15 (spec 012) is open from `docs-pr12-merged`.
 - New work: branch off `main` and open a PR.
 - Commits must be authored as `pradeepkundekar0101 <91021094+PradeepKundekar0101@users.noreply.github.com>`. The repo-local git config sets this; the machine's global identity is a different account.
 - The repo has no CI. Verification is local only.
@@ -67,8 +69,8 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the o
 | 007 Extraction resilience (lease heartbeat, reconciler, attempt cap, retry, health counts) | Done and verified (integration tests, `scripts/chaos.sh`, retry and Redis-down checks in docker), merged (PR #4). |
 | 008 Review UI | Revision 2 (the Lomi Labs design system) done and verified (component tests with MSW, api integration, E2E in docker through nginx), merged (PR #7). The 2026-11-28 submission check added fixes (list order, stale toast, readable model errors, nginx cache headers) and the root `README.md`, also in PR #7. |
 | 009 API layers and validated boundaries | Done, merged (PR #11). Its images were rebuilt and run end to end with spec 010's compose check. |
-| 012 Light backdrop and page headers | Done and verified (unit test, component tests, E2E in docker through nginx), committed on branch `docs-pr12-merged` on top of spec 011, not merged yet. A pastel sky image (BG 005 from the Figma Community "Super Visuals: Backgrounds Library.") behind the header and page titles, one header layout on both pages, a live summary on the list. |
-| 011 Delete documents | Done and verified (integration against Postgres, worker integration, component tests, E2E in docker), committed on branch `docs-pr12-merged`, not merged yet. Soft delete (`documents.deleted_at`); the cloud deployment does not have it yet, and deploying it needs the migrate job first. The same branch has spec 008 point 9: an approved value shows only Correct. |
+| 012 Light backdrop and page headers | Done and verified (unit test, component tests, E2E in docker through nginx), in PR #15 (branch `docs-pr12-merged`), not merged yet. A pastel sky image (BG 005 from the Figma Community "Super Visuals: Backgrounds Library.") behind the header and page titles, one header layout on both pages, a live summary on the list. |
+| 011 Delete documents | Done and verified (integration against Postgres, worker integration, component tests, E2E in docker), merged (PR #14). Soft delete (`documents.deleted_at`); the cloud deployment does not have it yet, and deploying it needs the migrate job first. PR #14 also has spec 008 point 9: an approved value shows only Correct. |
 | 010 Cloud deployment | Revision 2 (Google Cloud) done and verified in the cloud and in compose, merged (PR #12). Live in project `lomi-review-1128` (`asia-south1`): api `https://api-pqoxlls5ja-el.a.run.app`, UI `https://lomi-review-pi.vercel.app`. Revision 1 (AWS) was destroyed. It costs about $3 to $4 a day until `terraform destroy`. |
 
 Draft specs contain assumptions and open questions; confirm them with the user before implementing.
@@ -104,7 +106,7 @@ The worker and web images were then rebuilt from what became `bb47aaa`, and the 
 The root `README.md` is the brief's required README: every claim in it was observed on 2026-11-28; re-check the claims if behavior changes.
 The api service has no healthcheck, so `docker compose up --wait` returns before it listens; give it a second before the first request.
 On 2026-11-28 all images were rebuilt from the spec 011 working tree; its E2E uploaded and then deleted `e2e-delete-list.pdf` (`a28ff0f7…`) and `e2e-delete-page.pdf` (`bb5721dc…`), which stay in Postgres with `deleted_at` set.
-The web image was then rebuilt with spec 012 (`docker compose build web`, then `up -d --no-deps --force-recreate web`); its E2E only viewed pages.
+The web image was then rebuilt with spec 012 (`docker compose build web`, then `up -d --no-deps --force-recreate web`). For the README screenshot (`docs/review-v2.png`, headless Chrome at 1280x900 through nginx) a new document "Meridian Office Supplies invoice" (`ef78f2c3…`) was uploaded from `invoice-001.pdf`, all five v1 values approved, and `invoice-001.v2.pdf` uploaded as v2 (2 changed, 3 carried over); `doc-invoice-001` is at v3 with nothing changed, so it no longer shows that story.
 
 ## Gotchas found so far (read these, they cost time)
 
