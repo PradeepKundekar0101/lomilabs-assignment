@@ -7,7 +7,7 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 // Error codes the API sends without a sentence of their own.
 const MESSAGES: Record<string, string> = {
   identical_to_current: 'This file is identical to the current version.',
-  stale_version: 'A newer version arrived.',
+  stale_version: 'A newer version arrived, so this review was not saved. Showing the new version.',
 }
 
 export class ApiError extends Error {

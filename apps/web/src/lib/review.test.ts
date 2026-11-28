@@ -34,8 +34,8 @@ describe('sortForTriage', () => {
     id, title: id, type: 'invoice', versionNo: 1, status: 'extracted', error: null, total: 5, pending: 0, ...d,
   })
 
-  it('puts failed documents first, then those with pending values, keeping the order within each', () => {
-    const docs = [doc('done', {}), doc('pending-1', { pending: 2 }), doc('failed', { status: 'failed' }), doc('queued', { status: 'queued', total: 0 }), doc('pending-2', { pending: 1 })]
-    expect(sortForTriage(docs).map((d) => d.id)).toEqual(['failed', 'pending-1', 'pending-2', 'done', 'queued'])
+  it('puts failed documents first, then those in flight or with pending values, keeping the order within each', () => {
+    const docs = [doc('queued', { status: 'queued', total: 0 }), doc('done', {}), doc('pending-1', { pending: 2 }), doc('failed', { status: 'failed' }), doc('extracting', { status: 'extracting', total: 0 }), doc('pending-2', { pending: 1 })]
+    expect(sortForTriage(docs).map((d) => d.id)).toEqual(['failed', 'queued', 'pending-1', 'extracting', 'pending-2', 'done'])
   })
 })

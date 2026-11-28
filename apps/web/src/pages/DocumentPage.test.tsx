@@ -116,7 +116,7 @@ describe('document page', () => {
     const before = api.reads.document
 
     await user.click(within(due).getByRole('button', { name: 'Approve' }))
-    expect(await screen.findByText('A newer version arrived')).toBeVisible()
+    expect(await screen.findByText('A newer version arrived, so this review was not saved. Showing the new version.')).toBeVisible()
     await waitFor(() => expect(api.reads.document).toBeGreaterThan(before))
   })
 

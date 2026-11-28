@@ -37,7 +37,8 @@ export function StatusBadge({ status, error }: { status: VersionStatus | null; e
               Failed
             </Badge>
           </TooltipTrigger>
-          <TooltipContent>{error ?? 'No error recorded'}</TooltipContent>
+          {/* Errors can hold long unbroken tokens (ids, JSON) that would overflow the bubble. */}
+          <TooltipContent className="wrap-anywhere">{error ?? 'No error recorded'}</TooltipContent>
         </Tooltip>
       )
     case 'superseded':

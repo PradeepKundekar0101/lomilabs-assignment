@@ -58,7 +58,7 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the o
 | 005 New versions and carry-over | Revision 2 done and verified (unit, integration against Postgres, E2E in docker with the real model), merged (PR #6). |
 | 006 Seed the fixture documents | Done and verified in docker (`down -v`, `up`, `restart`), merged (PR #2). |
 | 007 Extraction resilience (lease heartbeat, reconciler, attempt cap, retry, health counts) | Done and verified (integration tests, `scripts/chaos.sh`, retry and Redis-down checks in docker), merged (PR #4). |
-| 008 Review UI | Revision 2 (the Lomi Labs design system) done and verified (component tests with MSW, api integration, E2E in docker through nginx), in review as PR #7 on branch `review-ui`. |
+| 008 Review UI | Revision 2 (the Lomi Labs design system) done and verified (component tests with MSW, api integration, E2E in docker through nginx), in review as PR #7 on branch `review-ui`. The 2026-11-28 submission check added fixes (list order, stale toast, readable model errors, nginx cache headers) and the root `README.md`, uncommitted. Reviewers clone `main`, so PR #7 must be merged before the deadline. |
 
 Draft specs contain assumptions and open questions; confirm them with the user before implementing.
 
@@ -88,6 +88,9 @@ The api and worker images were rebuilt from the `new-versions` branch on 2026-11
 The spec 004 E2E left reviews on two non-fixture documents, `c7dfe635…` and `d5c9a499…`. The spec 005 E2E reviewed `doc-invoice-001` version 1 and uploaded version 2, which is now current with 2 pending and 3 carried-over values; the other two seeded documents have no reviews.
 The api and web images were rebuilt from the `review-ui` branch on 2026-11-27.
 The spec 008 E2E reviewed the non-fixture lease `7e2309bf…` (2 approves, 1 correction) and uploaded `broken-e2e.pdf` (`5e3ee4ab…`, two versions, both `failed` on purpose); `doc-invoice-001` was only viewed.
+On 2026-11-28 the stack was rebuilt from empty volumes from a fresh clone with `.env.example` (`down -v --rmi local`, then `up`; about 8 minutes with the build cache warm), and the brief's checks were run against it: the results are in the root `README.md`'s failure table.
+The worker and web images were then rebuilt from the working tree, and the stack recreated from this checkout; it holds 32 extracted versions (one superseded), `doc-invoice-001` at v3 (v1 fully reviewed, v2 and v3 with 2 pending each), and 3 reviews on `doc-lease-001`.
+The root `README.md` is the brief's required README: every claim in it was observed on 2026-11-28; re-check the claims if behavior changes.
 The api service has no healthcheck, so `docker compose up --wait` returns before it listens; give it a second before the first request.
 
 ## Gotchas found so far (read these, they cost time)
@@ -121,6 +124,9 @@ The api service has no healthcheck, so `docker compose up --wait` returns before
 27. **shadcn's components import `cn` from the `cn` package** (shadcn-ui/cn), not `clsx` + `tailwind-merge`, and `index.css` imports `shadcn/tailwind.css`, so `shadcn` is a runtime dependency. Do not edit `src/components/ui` except theme tokens; oxlint's `only-export-components` is off there.
 28. **MSW 3 renamed `onUnhandledRequest` to `onUnhandledFrame`.** The web tests stub `scrollIntoView`, `ResizeObserver` and `matchMedia` for jsdom in `src/test/setup.ts`.
 29. **The design system lives in `apps/web/src/index.css`.** It maps the Lomi Labs tokens onto shadcn's: `text-sm` is 15px, `font-medium` is 560, `rounded-lg` (controls) is 4px and `rounded-xl` (cards) 8px, and `headline-lg`/`headline-md` are custom text tokens. shadcn's `cn` does not know the custom tokens, so `cn('text-base', 'text-headline-lg')` keeps both; put the headline tokens on plain elements, not on shadcn components that set their own size.
+30. **The compose project name is fixed (`lomi`).** A second checkout (a fresh clone) runs the same containers and volumes, and `docker compose up` there reuses existing `lomi-*` images instead of building; remove them (`down --rmi local`) to test a real first build. Recreate the stack from this checkout afterwards, or `migrate-seed` mounts the other checkout's `fixtures`.
+31. **`docker compose restart` does not re-read `.env`.** To change the worker's API key, `docker compose up -d worker`; `ANTHROPIC_API_KEY=x docker compose up -d --no-deps worker` simulates a bad key.
+32. **Browsers cache `index.html` heuristically without `Cache-Control`.** nginx sends `no-cache` for it and `immutable` for `/assets/`; after a web rebuild a stale page in a test browser is the cache, not the build.
 
 ## User preferences (from the user's global instructions)
 

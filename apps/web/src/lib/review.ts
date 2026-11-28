@@ -36,8 +36,8 @@ export function reviewSummary(values: Value[]): string {
   return parts.filter(Boolean).join(' · ')
 }
 
-/** Failed first, then documents with values to review, then the rest; the API's order (newest first) within each. */
+/** Failed first, then documents in flight or with values to review, then the rest; the API's order (newest first) within each. */
 export function sortForTriage(docs: DocumentListItem[]): DocumentListItem[] {
-  const rank = (d: DocumentListItem) => (d.status === 'failed' ? 0 : d.pending > 0 ? 1 : 2)
+  const rank = (d: DocumentListItem) => (d.status === 'failed' ? 0 : isInFlight(d.status) || d.pending > 0 ? 1 : 2)
   return docs.toSorted((a, b) => rank(a) - rank(b))
 }

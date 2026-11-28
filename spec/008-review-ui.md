@@ -27,14 +27,15 @@ Clarity matters more than polish.
 3. Query keys live in one place: `['documents']`, `['document', id, versionNo]`, `['progress', id]`.
 4. Polling: `refetchInterval: (q) => isInFlight(q.state.data) ? 2000 : false`, where in flight is `queued` or `extracting` (for the list, any row in flight).
 5. Mutations invalidate `['documents']`, `['document', id]` and `['progress', id]` on success.
-6. `useReview`: a `409 stale_version` shows the toast "A newer version arrived", then invalidates.
+6. `useReview`: a `409 stale_version` shows the toast "A newer version arrived, so this review was not saved. Showing the new version.", then invalidates.
 
 ### 2. Document list (`/`)
 
 1. A table with title, type, version, status and progress.
 2. Status is a Badge: queued (secondary), extracting (with a spinner), extracted (green), failed (destructive, a Tooltip shows the error).
 3. Progress: a Progress bar and "3 pending · 8 done".
-4. Sort: failed first, then any with pending values, then the rest.
+4. Sort: failed first, then any still extracting (queued or extracting) or with pending values, then the rest; newest first within each.
+   A fresh upload therefore lands at the top of its group instead of below every document with pending values.
 5. "Upload document" opens a Dialog with a type Select and a file input, sent with `useUploadDocument`.
    The new row shows up at once as queued.
 
@@ -109,7 +110,7 @@ The UI follows the user's "Lomi Labs" design system: calm, spacious, flat, with 
 - [x] Component: Correct with an empty value is blocked (inline error, no request); Approve sends `{ action: "approve" }` and the Badge turns "Approved".
 - [x] Component: polling (fake timers) refetches while the version is extracting and stops once it is `extracted`.
 - [x] Component: the "Previous (v1)" block renders for both changed values with the old value and its review, and not for carried-over values or a gap; a carried-over correction strikes through the model's value.
-- [x] Component: a `409 stale_version` on review shows the toast "A newer version arrived" and refetches.
+- [x] Component: a `409 stale_version` on review shows the toast "A newer version arrived, so this review was not saved. Showing the new version." and refetches.
 - [x] Component: selecting a value marks its evidence in the text (also a regression test for the effect-cleanup crash, below); an older version is read-only with the "Viewing v1 (read-only)" banner.
 - [x] Unit (`apps/web/src/lib/review.test.ts`): what counts as changed, the summary line, the triage sort.
 - [x] Route (`apps/api/src/app.test.ts`) and integration against Postgres (`apps/api/src/review.test.ts`): `GET /documents` carries `error`, `total` and `pending`, newest first; the document views carry `parsedText` on `version` only; list, view and progress responses parse with the `@lomi/shared` schemas.
@@ -118,6 +119,7 @@ The UI follows the user's "Lomi Labs" design system: calm, spacious, flat, with 
   Upload: a non-PDF showed the API's message inline; a broken PDF appeared at once as queued, then failed (first in the list, error in the tooltip); Retry re-queued it and it failed again; a new version uploaded twice showed "This file is identical to the current version."; an unknown id shows "Not found".
   Found and fixed during E2E: clicking a card blanked the page (Chrome's `scrollIntoView` returns a Promise, which React called as the effect's cleanup; the jsdom stub now returns one too), the uppercased "PREVIOUS (V1)", a carried correction without the strikethrough, evidence left at the panel's edge, "Extracting" shown while queued, lowercase API messages, a 7-second skeleton before "Not found", and a cramped header on phones.
 - [x] Revision 2, in the browser against the compose api (Vite dev server, then the rebuilt web image): the computed styles match the tokens (page `#F4F4F4`, headline 36px at 650 with -0.02em, page buttons 43px at 15px and 560 with a 4px radius, cards 8px, supporting text `#6B6B74`); the list, the document page, the upload dialog and a failed document checked at desktop and phone width; the 11 component tests pass unchanged.
+- [x] Submission check, 2026-11-28 (fresh clone with `.env.example`, `docker compose up`, then the brief's reliability checks against it): found and fixed a fresh upload sorting below every document with pending values (requirement 2.4 changed), a stale-version toast that did not say the review was discarded (requirement 1.6), a raw JSON model error and a tooltip that clipped it, and `index.html` cached heuristically by browsers after a redeploy (nginx now sends `no-cache` for it and `immutable` for the hashed assets).
 
 ## Open questions
 

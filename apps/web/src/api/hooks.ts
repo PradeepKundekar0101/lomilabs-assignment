@@ -102,7 +102,7 @@ export function useReview() {
     onSuccess: (_value, { documentId }) => invalidate(client, documentId),
     onError: (err, { documentId }) => {
       if (err instanceof ApiError && err.status === 409 && err.error === 'stale_version') {
-        toast.info('A newer version arrived')
+        toast.info('A newer version arrived, so this review was not saved. Showing the new version.')
         return invalidate(client, documentId)
       }
       toast.error(`Review not saved: ${err.message}`)

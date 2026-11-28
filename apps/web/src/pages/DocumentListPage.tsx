@@ -26,7 +26,7 @@ export function DocumentListPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="grid gap-1.5">
           <h1 className="text-headline-lg text-primary">Documents</h1>
-          <p className="text-muted-foreground">Failed extractions come first, then documents with values to review.</p>
+          <p className="text-muted-foreground">Failed extractions come first, then documents in progress or with values to review.</p>
         </div>
         <UploadDialog />
       </div>
