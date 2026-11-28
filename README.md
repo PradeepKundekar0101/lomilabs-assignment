@@ -20,7 +20,7 @@ When a revised PDF arrives, reviews of unchanged values carry over, and only wha
 </div>
 
 <p align="center">
-  <img src="docs/review-v2.png" alt="The revised invoice: the summary reads 2 changed since v1 and 3 carried over; the changed due date shows its v1 value and approval beside it, and the matching quote is highlighted in the document text." width="900">
+  <img src="docs/review-v2.png" alt="The revised invoice: the summary reads 2 changed since v1 and 3 carried over; the changed due date shows its v1 value and approval under it, and the matching quote is highlighted in the document text." width="900">
   <br>
   <sub>The revised invoice: the two changed values are on top with their v1 value and review, the rest carried over, and the selected value's quote is marked in the text.</sub>
 </p>
