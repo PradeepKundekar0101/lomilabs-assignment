@@ -10,7 +10,7 @@ import { UploadDialog } from '@/components/UploadDialog'
 import { ValueCard } from '@/components/ValueCard'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -70,30 +70,32 @@ function Header({ doc, onVersion }: { doc: DocumentView; onVersion: (versionNo: 
   const isCurrent = version?.versionNo === current?.versionNo
 
   return (
-    <Card className="gap-5 [--card-spacing:--spacing(7)]">
-      {/* Stacked on phones, so the upload button does not squeeze the title into a narrow column. */}
-      <CardHeader className="max-sm:has-data-[slot=card-action]:grid-cols-1">
-        <h1 className="text-headline-md text-primary sm:text-headline-lg">{doc.title}</h1>
-        <CardDescription className="mt-3 flex flex-wrap items-center gap-3">
-          {TYPE_LABELS[doc.type]}
-          {current && version && (
-            <Select value={String(version.versionNo)} onValueChange={(v) => onVersion(Number(v) === current.versionNo ? undefined : Number(v))}>
-              <SelectTrigger size="sm" className="bg-card" aria-label="Version">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: current.versionNo }, (_, i) => current.versionNo - i).map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    v{n}
-                    {n === current.versionNo && ' (current)'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <StatusBadge status={version?.status ?? null} error={version?.error} />
-        </CardDescription>
-        <CardAction className="max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:mt-4 max-sm:justify-self-start">
+    <>
+      <div className="on-sky grid gap-5">
+        {/* The buttons wrap under the title when both do not fit, so they never squeeze it into a narrow column. */}
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-5">
+          <div className="grid min-w-0 flex-1 basis-80 gap-3">
+            <h1 className="text-headline-md text-primary sm:text-headline-lg">{doc.title}</h1>
+            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+              {TYPE_LABELS[doc.type]}
+              {current && version && (
+                <Select value={String(version.versionNo)} onValueChange={(v) => onVersion(Number(v) === current.versionNo ? undefined : Number(v))}>
+                  <SelectTrigger size="sm" className="bg-card" aria-label="Version">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: current.versionNo }, (_, i) => current.versionNo - i).map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        v{n}
+                        {n === current.versionNo && ' (current)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <StatusBadge status={version?.status ?? null} error={version?.error} />
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2">
             <UploadDialog documentId={doc.id} />
             <DeleteDialog
@@ -109,9 +111,7 @@ function Header({ doc, onVersion }: { doc: DocumentView; onVersion: (versionNo: 
               }
             />
           </div>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="grid gap-4">
+        </div>
         {version?.status === 'extracted' && <p className="text-base font-medium text-primary">{reviewSummary(doc.values)}</p>}
         {isInFlight(version?.status) && (
           <p className="text-muted-foreground">
@@ -119,40 +119,43 @@ function Header({ doc, onVersion }: { doc: DocumentView; onVersion: (versionNo: 
           </p>
         )}
         {isCurrent && <ProgressLine id={doc.id} />}
-        {!isCurrent && version && current && (
-          <Alert>
-            <AlertTitle>Viewing v{version.versionNo} (read-only)</AlertTitle>
-            <AlertDescription>Reviews are made on the current version, v{current.versionNo}.</AlertDescription>
+      </div>
+      {!isCurrent && version && current && (
+        <Alert>
+          <AlertTitle>Viewing v{version.versionNo} (read-only)</AlertTitle>
+          <AlertDescription>Reviews are made on the current version, v{current.versionNo}.</AlertDescription>
+          <AlertAction>
+            <Button size="sm" variant="outline" onClick={() => onVersion(undefined)}>
+              Go to v{current.versionNo}
+            </Button>
+          </AlertAction>
+        </Alert>
+      )}
+      {version?.status === 'failed' && (
+        <Alert variant="destructive">
+          <AlertTitle>Extraction failed</AlertTitle>
+          <AlertDescription>{version.error ?? 'No error recorded.'}</AlertDescription>
+          {isCurrent && (
             <AlertAction>
-              <Button size="sm" variant="outline" onClick={() => onVersion(undefined)}>
-                Go to v{current.versionNo}
+              <Button size="sm" variant="outline" disabled={retry.isPending} onClick={() => retry.mutate()}>
+                <RotateCw aria-hidden />
+                Retry
               </Button>
             </AlertAction>
-          </Alert>
-        )}
-        {version?.status === 'failed' && (
-          <Alert variant="destructive">
-            <AlertTitle>Extraction failed</AlertTitle>
-            <AlertDescription>{version.error ?? 'No error recorded.'}</AlertDescription>
-            {isCurrent && (
-              <AlertAction>
-                <Button size="sm" variant="outline" disabled={retry.isPending} onClick={() => retry.mutate()}>
-                  <RotateCw aria-hidden />
-                  Retry
-                </Button>
-              </AlertAction>
-            )}
-          </Alert>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </Alert>
+      )}
+    </>
   )
 }
 
 function LoadingPage() {
   return (
     <div className="grid gap-7" aria-busy="true" aria-label="Loading document">
-      <Skeleton className="h-40 w-full bg-foreground/5" />
+      <div className="grid gap-3">
+        <Skeleton className="h-10 w-2/3 bg-foreground/5" />
+        <Skeleton className="h-7 w-64 bg-foreground/5" />
+      </div>
       <div className="grid gap-7 lg:grid-cols-2">
         <div className="grid gap-4">
           {[1, 2, 3].map((n) => (
@@ -173,7 +176,7 @@ export function DocumentPage() {
   const [selectedId, setSelectedId] = useState<string>()
 
   const back = (
-    <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+    <Link to="/" className="on-sky inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
       <ArrowLeft className="size-4" aria-hidden />
       All documents
     </Link>

@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { sortForTriage, TYPE_LABELS } from '@/lib/review'
+import { listSummary, sortForTriage, TYPE_LABELS } from '@/lib/review'
 import { cn } from '@/lib/utils'
 
 // Phones show the title (with the counts under it) and the status; the other columns need a wider screen.
@@ -18,8 +18,8 @@ const NARROW_HIDDEN = 'max-md:hidden'
 const COLUMNS = ['Title', 'Type', 'Version', 'Status', 'Progress', 'Actions']
 const columnClass = (c: string) =>
   c === 'Type' || c === 'Version' ? NARROW_HIDDEN : c === 'Progress' ? 'max-sm:hidden md:w-64' : c === 'Actions' ? 'w-px' : undefined
-// The first and last columns sit a little further in, like the card's padding.
-const PAD = 'px-4 first:pl-5 last:pr-5'
+// The first and last columns sit a little further in, like the card's padding; tighter on phones, so titles keep room.
+const PAD = 'px-3 first:pl-4 last:pr-3 sm:px-4 sm:first:pl-5 sm:last:pr-5'
 const CELL = cn(PAD, 'py-3.5')
 
 export function DocumentListPage() {
@@ -27,10 +27,17 @@ export function DocumentListPage() {
 
   return (
     <div className="grid gap-7">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="grid gap-1.5">
+      <div className="on-sky flex flex-wrap items-start justify-between gap-x-6 gap-y-5">
+        <div className="grid gap-3">
           <h1 className="text-headline-lg text-primary">Documents</h1>
-          <p className="text-muted-foreground">Failed extractions come first, then documents in progress or with values to review.</p>
+          <div className="grid gap-1">
+            {data ? (
+              <p className="text-base font-medium text-primary">{listSummary(data)}</p>
+            ) : (
+              !error && <Skeleton className="h-6 w-72 bg-foreground/5" />
+            )}
+            <p className="text-muted-foreground">Failed extractions come first, then documents in progress or with values to review.</p>
+          </div>
         </div>
         <UploadDialog />
       </div>

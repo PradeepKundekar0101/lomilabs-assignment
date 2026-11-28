@@ -83,6 +83,11 @@
     --brand: #7cade4;
 }
 
+/* Text on the backdrop image (spec 012): #6b6b74 drops to 3.4:1 on its lavender; this keeps muted text at AA. */
+@utility on-sky {
+    --muted-foreground: #55555e;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

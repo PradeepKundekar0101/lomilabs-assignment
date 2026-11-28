@@ -36,6 +36,20 @@ export function reviewSummary(values: Value[]): string {
   return parts.filter(Boolean).join(' · ')
 }
 
+/** The list's "what needs me?": e.g. "34 values to review in 12 documents · 2 failed · 1 in progress". */
+export function listSummary(docs: DocumentListItem[]): string {
+  if (docs.length === 0) return 'No documents yet'
+  const pending = docs.reduce((n, d) => n + d.pending, 0)
+  const failed = docs.filter((d) => d.status === 'failed').length
+  const inFlight = docs.filter((d) => isInFlight(d.status)).length
+  const parts = [
+    pending ? `${count(pending, 'value')} to review in ${count(docs.filter((d) => d.pending > 0).length, 'document')}` : 'Nothing to review',
+    failed && `${failed} failed`,
+    inFlight && `${inFlight} in progress`,
+  ]
+  return parts.filter(Boolean).join(' · ')
+}
+
 /** Failed first, then documents in flight or with values to review, then the rest; the API's order (newest first) within each. */
 export function sortForTriage(docs: DocumentListItem[]): DocumentListItem[] {
   const rank = (d: DocumentListItem) => (d.status === 'failed' ? 0 : isInFlight(d.status) || d.pending > 0 ? 1 : 2)
