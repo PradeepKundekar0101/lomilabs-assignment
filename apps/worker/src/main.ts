@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { createLlm, ExpectedFieldsSchema } from "@lomi/core";
+import { createLlm, ExpectedFieldsSchema, gcsBucket } from "@lomi/core";
 import { createDb, DocumentType } from "@lomi/db";
 import { Worker } from "bullmq";
 import { Redis } from "ioredis";
@@ -17,17 +17,19 @@ for (const type of Object.values(DocumentType)) {
 
 const { LLM_MODEL: model, WORKER_CONCURRENCY: concurrency, LEASE_SECONDS: leaseSeconds, RECONCILE_SECONDS: reconcileSeconds } = env;
 const db = createDb(env.DATABASE_URL);
+// Same as the api's s3Config (apps/api/src/infra.ts): MinIO sets an endpoint, path-style URLs and keys; on AWS the role is used.
 const s3 = new S3Client({
-  endpoint: env.S3_ENDPOINT,
-  // MinIO ignores the region, but the SDK requires one.
-  region: "us-east-1",
-  forcePathStyle: true,
-  credentials: { accessKeyId: env.S3_ACCESS_KEY, secretAccessKey: env.S3_SECRET_KEY },
+  region: env.AWS_REGION,
+  ...(env.S3_ENDPOINT && { endpoint: env.S3_ENDPOINT, forcePathStyle: true }),
+  ...(env.S3_ACCESS_KEY && env.S3_SECRET_KEY && { credentials: { accessKeyId: env.S3_ACCESS_KEY, secretAccessKey: env.S3_SECRET_KEY } }),
 });
+
+const gcs = env.GCS_BUCKET ? gcsBucket(env.GCS_BUCKET) : undefined;
 
 const deps: ExtractDeps = {
   db,
   getObject: async (key: string) => {
+    if (gcs) return gcs.get(key);
     const { Body } = await s3.send(new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
     if (!Body) throw new Error(`object ${key} has no body`);
     return Body.transformToByteArray();

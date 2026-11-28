@@ -1,4 +1,5 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { PutObjectCommand, S3Client, type S3ClientConfig } from "@aws-sdk/client-s3";
+import { gcsBucket } from "@lomi/core";
 import { createDb } from "@lomi/db";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
@@ -22,17 +23,19 @@ export const extractionQueue = (connection: Redis, name = "extraction") =>
 /** jobId = versionId makes a repeated enqueue of a waiting or active version a no-op. */
 export const enqueueTo = (queue: Queue) => async (versionId: string) => void (await queue.add("extract", { versionId }, { jobId: versionId }));
 
+/** MinIO (compose) sets an endpoint, path-style URLs and keys; on AWS none is set and the default chain finds the role. */
+export const s3Config = (env: Pick<InfraEnv, "S3_ENDPOINT" | "S3_ACCESS_KEY" | "S3_SECRET_KEY" | "AWS_REGION">): S3ClientConfig => ({
+  region: env.AWS_REGION,
+  ...(env.S3_ENDPOINT && { endpoint: env.S3_ENDPOINT, forcePathStyle: true }),
+  ...(env.S3_ACCESS_KEY && env.S3_SECRET_KEY && { credentials: { accessKeyId: env.S3_ACCESS_KEY, secretAccessKey: env.S3_SECRET_KEY } }),
+});
+
 /** The database, object storage and queue clients, and the `createVersion` dependencies built on them. */
 export function createInfra(env: InfraEnv) {
   const db = createDb(env.DATABASE_URL);
 
-  const s3 = new S3Client({
-    endpoint: env.S3_ENDPOINT,
-    // MinIO ignores the region, but the SDK requires one.
-    region: "us-east-1",
-    forcePathStyle: true,
-    credentials: { accessKeyId: env.S3_ACCESS_KEY, secretAccessKey: env.S3_SECRET_KEY },
-  });
+  const s3 = new S3Client(s3Config(env));
+  const gcs = env.GCS_BUCKET ? gcsBucket(env.GCS_BUCKET) : undefined;
 
   // Fail fast: with Redis down, queue.add rejects at once (the upload still succeeds and the row stays
   // queued) instead of hanging the request until Redis is back.
@@ -42,6 +45,7 @@ export function createInfra(env: InfraEnv) {
 
   const versionDeps: CreateVersionDeps = {
     putObject: async (key, body, contentType) => {
+      if (gcs) return gcs.put(key, body, contentType);
       await s3.send(new PutObjectCommand({ Bucket: env.S3_BUCKET, Key: key, Body: body, ContentType: contentType }));
     },
     db,
