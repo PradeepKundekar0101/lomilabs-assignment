@@ -1,62 +1,25 @@
-import { useEffect, useState } from 'react'
+import { Link, Route, Routes } from 'react-router'
+import { DocumentListPage } from '@/pages/DocumentListPage'
+import { DocumentPage } from '@/pages/DocumentPage'
 
-type Counts = Record<string, number>
-export type Health = { db: string; redis: string; versions: Counts | null; queue: Counts | null }
-
-function Counts({ title, counts }: { title: string; counts: Counts | null }) {
-  // A service that is down already shows "error" above; there is nothing to count.
-  if (!counts) return null
+export function App() {
   return (
-    <>
-      <h2>{title}</h2>
-      <dl>
-        {Object.entries(counts).map(([name, n]) => (
-          <div key={name}>
-            <dt>{name}</dt>
-            <dd>{n}</dd>
-          </div>
-        ))}
-      </dl>
-    </>
+    <div className="min-h-screen">
+      <header className="border-b bg-card">
+        <div className="mx-auto flex h-16 max-w-6xl items-center px-4 sm:px-7">
+          <Link to="/" className="flex items-center gap-2 text-lg font-semibold tracking-tight text-primary">
+            <span className="size-2.5 rounded-full bg-brand" aria-hidden />
+            Lomi
+            <span className="font-normal text-muted-foreground">Review</span>
+          </Link>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-4 py-10 sm:px-7">
+        <Routes>
+          <Route path="/" element={<DocumentListPage />} />
+          <Route path="/documents/:id" element={<DocumentPage />} />
+        </Routes>
+      </main>
+    </div>
   )
-}
-
-export function HealthView({ health, error }: { health?: Health; error?: string }) {
-  return (
-    <main>
-      <h1>System health</h1>
-      {error ? (
-        <p className="error">Could not reach the API: {error}</p>
-      ) : !health ? (
-        <p>Checking...</p>
-      ) : (
-        <>
-          <dl>
-            {(['db', 'redis'] as const).map((name) => (
-              <div key={name}>
-                <dt>{name}</dt>
-                <dd className={health[name] === 'ok' ? 'ok' : 'error'}>{health[name]}</dd>
-              </div>
-            ))}
-          </dl>
-          <Counts title="Queue" counts={health.queue} />
-          <Counts title="Versions" counts={health.versions} />
-        </>
-      )}
-    </main>
-  )
-}
-
-export default function App() {
-  const [health, setHealth] = useState<Health>()
-  const [error, setError] = useState<string>()
-
-  useEffect(() => {
-    // A 503 still carries the per-service body, so read JSON regardless of status.
-    fetch('/health')
-      .then((res) => res.json())
-      .then(setHealth, (err: Error) => setError(err.message))
-  }, [])
-
-  return <HealthView health={health} error={error} />
 }

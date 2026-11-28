@@ -1,83 +1,96 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/plus-jakarta-sans";
+@import "@fontsource-variable/geist-mono";
+
+/* The design system is light only: `dark:` applies under a `.dark` ancestor, which the app never sets. */
+@custom-variant dark (&:is(.dark *));
+
+/* Lomi Labs design system (spec 008, revision 2), mapped onto the tokens the shadcn components read. */
+@theme inline {
+    --font-sans: 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, sans-serif;
+    --font-heading: var(--font-sans);
+    --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --color-brand: var(--brand);
+
+    /* The components use rounded-lg for controls and rounded-xl for cards and dialogs: the design's 4px and 8px. */
+    --radius-sm: 2px;
+    --radius-md: 4px;
+    --radius-lg: 4px;
+    --radius-xl: 8px;
+    --radius-2xl: 12px;
+    --radius-3xl: 16px;
+    --radius-4xl: 9999px;
+}
+
+@theme {
+    /* The design's body-sm and label-md; text-xs, base, lg and xl already match its 12, 16, 18 and 20px. */
+    --text-sm: 15px;
+    --text-sm--line-height: 1.47;
+    --text-headline-lg: 36px;
+    --text-headline-lg--line-height: 1.11;
+    --text-headline-lg--letter-spacing: -0.02em;
+    --text-headline-lg--font-weight: 650;
+    --text-headline-md: 20px;
+    --text-headline-md--line-height: 1.4;
+    --text-headline-md--letter-spacing: -0.02em;
+    --text-headline-md--font-weight: 500;
+    /* Labels, buttons and badges. */
+    --font-weight-medium: 560;
+}
+
 :root {
-  --text: #4b4553;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --ok: #157f3b;
-  --error: #b42318;
-
-  font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  -webkit-font-smoothing: antialiased;
+    --background: #ffffff;
+    --foreground: #171717;
+    --card: #ffffff;
+    --card-foreground: #171717;
+    --popover: #ffffff;
+    --popover-foreground: #171717;
+    --primary: #09090b;
+    --primary-foreground: #ffffff;
+    --secondary: #f4f4f4;
+    --secondary-foreground: #171717;
+    /* The page wash. */
+    --muted: #f4f4f4;
+    /* Darker than the design's #8A8A93, which fails WCAG AA for body text (spec 008, revision 2). */
+    --muted-foreground: #6b6b74;
+    --accent: #f4f4f4;
+    --accent-foreground: #171717;
+    --destructive: #ef4444;
+    --border: #e5e7eb;
+    --input: #e5e7eb;
+    --ring: #7cade4;
+    --brand: #7cade4;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #b4b8c0;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --ok: #4ade80;
-    --error: #f87171;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-}
-
-body {
-  margin: 0;
-}
-
-main {
-  max-width: 420px;
-  margin: 80px auto;
-  padding: 0 16px;
-}
-
-h1 {
-  margin: 0 0 16px;
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--text-h);
-}
-
-h2 {
-  margin: 24px 0 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-h);
-}
-
-dl {
-  margin: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-dl div {
-  display: flex;
-  justify-content: space-between;
-  padding: 12px 16px;
-}
-
-dl div + div {
-  border-top: 1px solid var(--border);
-}
-
-dt {
-  color: var(--text-h);
-}
-
-dd {
-  margin: 0;
-  font-family: ui-monospace, Consolas, monospace;
-  font-weight: 600;
-}
-
-.ok {
-  color: var(--ok);
-}
-
-.error {
-  color: var(--error);
+  body {
+    @apply bg-muted text-foreground antialiased;
+  }
+  html {
+    @apply font-sans;
+  }
 }

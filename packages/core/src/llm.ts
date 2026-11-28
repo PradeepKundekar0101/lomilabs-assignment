@@ -47,6 +47,12 @@ export function buildPrompt(fields: ExpectedField[], parsedText: string): Prompt
   return { system: SYSTEM, user: `Fields to extract:\n${list}\n\n<document>\n${parsedText}\n</document>` };
 }
 
+/** "401 authentication_error: invalid x-api-key": the SDK's own message embeds the raw JSON body, which users see. */
+function describeRequestError(err: unknown): string {
+  if (err instanceof Anthropic.APIError && err.status) return `${err.status} ${err.type ?? "error"}: ${err.apiMessage ?? err.message}`;
+  return err instanceof Error ? err.message : String(err);
+}
+
 /**
  * Real model call; validation happens separately in parseLlmOutput so the raw response is saved first.
  * The client reads ANTHROPIC_API_KEY; without one each call fails as llm_request_failed.
@@ -68,7 +74,7 @@ export function createLlm(model: string, client = new Anthropic()): Llm {
         messages: [{ role: "user", content: prompt.user }],
       });
     } catch (err) {
-      throw new ExtractionError("llm_request_failed", err instanceof Error ? err.message : String(err), { cause: err });
+      throw new ExtractionError("llm_request_failed", describeRequestError(err), { cause: err });
     }
     const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("") || null;
     return {

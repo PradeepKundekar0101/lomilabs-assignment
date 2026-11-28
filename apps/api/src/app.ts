@@ -1,10 +1,11 @@
 import type { ExpectedFields } from "@lomi/core";
 import { DocumentType, type PrismaClient } from "@lomi/db";
+import { ReviewInputSchema } from "@lomi/shared";
 import express, { type Express } from "express";
 import { z } from "zod";
 import { StorageUnavailableError, VersionRejectedError, type CreateVersionResult, type VersionTarget } from "./create-version.js";
 import type { RetryResult } from "./retry.js";
-import { documentProgress, documentView, ReviewInputSchema, reviewValue } from "./review.js";
+import { documentList, documentProgress, documentView, reviewValue } from "./review.js";
 
 /** Each check returns counts, so a successful count is also the service's health check. */
 export interface HealthChecks {
@@ -109,18 +110,7 @@ export function createApp({ checks, db, fields, createVersion, retry }: AppDeps)
   });
 
   app.get("/documents", async (_req, res) => {
-    // shortcut: unpaginated, add cursor pagination when the list gets long.
-    const docs = await db.document.findMany({
-      orderBy: { createdAt: "desc" },
-      select: { id: true, title: true, type: true, currentVersion: { select: { versionNo: true, status: true } } },
-    });
-    res.json(
-      docs.map(({ currentVersion, ...doc }) => ({
-        ...doc,
-        versionNo: currentVersion?.versionNo ?? null,
-        status: currentVersion?.status ?? null,
-      })),
-    );
+    res.json(await documentList(db));
   });
 
   app.get("/documents/:id", async (req, res) => {
