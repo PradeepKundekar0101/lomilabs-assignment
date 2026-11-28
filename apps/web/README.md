@@ -18,4 +18,4 @@ The dev server proxies `/api/*` to the api at `API_URL` (default `http://localho
 - `src/api`: `client.ts` (fetch, parsed with the `@lomi/shared` schemas, `ApiError`) and `hooks.ts` (one TanStack Query hook per endpoint, the query keys, polling).
 - `src/lib/review.ts`: what counts as changed, the "what needs me?" summary, the list's triage order.
 - `src/pages`, `src/components`: the two pages and their parts.
-- `src/test`: MSW server, fixtures and a render helper for the component tests.
+- `tests`: the component and unit tests, with the MSW server, fixtures and a render helper.

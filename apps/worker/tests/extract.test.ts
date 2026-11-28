@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { ExpectedFieldsSchema, ExtractionError, type Llm, type LlmField } from "@lomi/core";
 import { createDb, type PrismaClient } from "@lomi/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { processVersion, type ExtractDeps } from "./extract.js";
+import { processVersion, type ExtractDeps } from "../src/extract.js";
 
 // Runs against a dedicated test database (see spec 007): TEST_DATABASE_URL=postgres://lomi:lomi@127.0.0.1:5433/lomi_test
 const url = process.env.TEST_DATABASE_URL;

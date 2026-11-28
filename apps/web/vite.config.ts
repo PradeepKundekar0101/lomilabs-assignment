@@ -16,5 +16,5 @@ export default defineConfig({
   },
   // React, Radix, zod and the router are most of the bundle (~190 kB gzipped), fine for an internal review tool.
   build: { chunkSizeWarningLimit: 700 },
-  test: { environment: 'jsdom', setupFiles: ['./src/test/setup.ts'] },
+  test: { environment: 'jsdom', setupFiles: ['./tests/setup.ts'] },
 })

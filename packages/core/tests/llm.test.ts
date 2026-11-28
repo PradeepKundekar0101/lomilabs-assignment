@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
-import { ExtractionError } from "./errors.js";
-import { buildPrompt, createLlm, parseLlmOutput, type LlmResponse } from "./llm.js";
+import { ExtractionError } from "../src/errors.js";
+import { buildPrompt, createLlm, parseLlmOutput, type LlmResponse } from "../src/llm.js";
 
 const response = (text: string | null, stopReason = "end_turn"): LlmResponse => ({ raw: "{}", text, stopReason, tokensIn: 1, tokensOut: 1 });
 const field = { key: "invoice_number", value: "INV-1", evidence: "INV-1", reason: null };

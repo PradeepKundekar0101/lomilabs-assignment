@@ -283,7 +283,7 @@ The parsed text is stored per version rather than re-parsed, so the evidence off
 - Each quote must appear in the version's parsed text, ignoring only whitespace differences, since PDF text extraction and the model rarely agree on line breaks.
 - The stored evidence is then the exact slice of the parsed text, with its offsets.
 - A quote that is not there becomes a gap with reason `evidence_not_found`; a field the model skipped becomes `missing_from_llm_output`; a field the model could not find keeps the model's reason.
-- `packages/core/src/evidence.test.ts` proves a hallucinated quote becomes a gap.
+- `packages/core/tests/evidence.test.ts` proves a hallucinated quote becomes a gap.
 
 The model is `claude-opus-5-5` with structured output against a zod schema, effort `medium`, and server-side refusal fallback.
 An extraction uses about 1,100 input and 260 output tokens, roughly one cent.

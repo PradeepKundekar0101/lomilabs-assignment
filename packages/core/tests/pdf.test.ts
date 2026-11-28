@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { extractPdfText } from "./pdf.js";
+import { extractPdfText } from "../src/pdf.js";
 
 const fixture = (name: string) => readFile(new URL(`../../../fixtures/documents/${name}`, import.meta.url));
 

@@ -71,7 +71,7 @@ Postgres is the source of truth; Redis only delivers jobs.
 
 ## Acceptance criteria
 
-Integration tests against real Postgres and Redis with a fake, slow model (`apps/worker/src/resilience.test.ts`, `apps/api/src/retry.test.ts`):
+Integration tests against real Postgres and Redis with a fake, slow model (`apps/worker/tests/resilience.test.ts`, `apps/api/tests/retry.test.ts`):
 
 - [x] Worker killed mid-extraction: after lease expiry and a reconcile, the version ends `extracted` with `attempts` 2.
 - [x] An attempt that outlives its lease, with its job flushed from Redis, keeps its claim through the heartbeat: one attempt.

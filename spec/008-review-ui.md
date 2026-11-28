@@ -106,14 +106,14 @@ The UI follows the user's "Lomi Labs" design system: calm, spacious, flat, with 
 
 ## Acceptance criteria
 
-- [x] Component (`apps/web/src/pages/DocumentPage.test.tsx`, vitest, Testing Library, MSW): pending values render before carried-over ones; a gap shows "No value" and its reason; the summary reads "2 changed since v1 · 1 gap · 2 carried over".
+- [x] Component (`apps/web/tests/DocumentPage.test.tsx`, vitest, Testing Library, MSW): pending values render before carried-over ones; a gap shows "No value" and its reason; the summary reads "2 changed since v1 · 1 gap · 2 carried over".
 - [x] Component: Correct with an empty value is blocked (inline error, no request); Approve sends `{ action: "approve" }` and the Badge turns "Approved".
 - [x] Component: polling (fake timers) refetches while the version is extracting and stops once it is `extracted`.
 - [x] Component: the "Previous (v1)" block renders for both changed values with the old value and its review, and not for carried-over values or a gap; a carried-over correction strikes through the model's value.
 - [x] Component: a `409 stale_version` on review shows the toast "A newer version arrived, so this review was not saved. Showing the new version." and refetches.
 - [x] Component: selecting a value marks its evidence in the text (also a regression test for the effect-cleanup crash, below); an older version is read-only with the "Viewing v1 (read-only)" banner.
-- [x] Unit (`apps/web/src/lib/review.test.ts`): what counts as changed, the summary line, the triage sort.
-- [x] Route (`apps/api/src/app.test.ts`) and integration against Postgres (`apps/api/src/review.test.ts`): `GET /documents` carries `error`, `total` and `pending`, newest first; the document views carry `parsedText` on `version` only; list, view and progress responses parse with the `@lomi/shared` schemas.
+- [x] Unit (`apps/web/tests/review.test.ts`): what counts as changed, the summary line, the triage sort.
+- [x] Route (`apps/api/tests/app.test.ts`) and integration against Postgres (`apps/api/tests/review.test.ts`): `GET /documents` carries `error`, `total` and `pending`, newest first; the document views carry `parsedText` on `version` only; list, view and progress responses parse with the `@lomi/shared` schemas.
 - [x] E2E in docker (api and web images rebuilt, nginx proxying `/api`): `doc-invoice-001` v2 shows "2 changed since v1 · 3 carried over", `due_date` and `total_amount` at the top with their v1 value and review, and the other 3 "Carried over from v1" (the vendor correction struck through); v1 is read-only.
   On a non-fixture lease: approve and correct (empty blocked, then saved with a note) updated badges, order and progress, and the selection moved to the next pending value.
   Upload: a non-PDF showed the API's message inline; a broken PDF appeared at once as queued, then failed (first in the list, error in the tooltip); Retry re-queued it and it failed again; a new version uploaded twice showed "This file is identical to the current version."; an unknown id shows "Not found".
