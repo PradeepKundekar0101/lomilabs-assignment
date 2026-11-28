@@ -26,6 +26,7 @@ Every feature starts as a numbered spec in this folder, and code follows the spe
 | 009 | [API layers and validated boundaries](009-api-layers-and-validation.md) | Done (merged in [PR #11](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/11)) |
 | 010 | [Cloud deployment](010-cloud-deployment.md) | Done (revision 2, Google Cloud; merged in [PR #12](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/12)) |
 | 011 | [Delete documents](011-delete-documents.md) | Done (verified 2026-11-28; on branch `docs-pr12-merged`, not merged yet) |
+| 012 | [Light backdrop and page headers](012-light-backdrop-and-page-headers.md) | Done (verified 2026-11-28; on branch `docs-pr12-merged`, not merged yet) |
 
 ## Template
 
