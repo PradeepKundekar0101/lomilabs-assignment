@@ -1,6 +1,6 @@
 # 008 Review UI
 
-Status: Done, revision 2 (the Lomi Labs design system, from the user on 2026-11-27; verified 2026-11-28); in review on branch `review-ui` (PR #7)
+Status: Done, revision 2 (the Lomi Labs design system, from the user on 2026-11-27; verified 2026-11-28); merged in PR #7 (`81db5a9`) on 2026-11-28
 Depends on: 002, 004, 005, 007
 
 ## Goal

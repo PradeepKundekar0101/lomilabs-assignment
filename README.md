@@ -1,203 +1,407 @@
+<div align="center">
+
 # Lomi document review
 
-PDFs go in, an LLM extracts field values with the exact quote each one came from, and a reviewer approves or corrects every value.
-When a revised PDF arrives, reviews of values whose evidence did not change carry over, and only what changed goes back to the reviewer.
+**PDFs in, values out, and a human checks every one before it is trusted.**
 
-## Run it
+An LLM extracts field values from each PDF together with the exact quote they came from.
+A reviewer approves or corrects each value beside its quote.
+When a revised PDF arrives, reviews of unchanged values carry over, and only what changed comes back for review.
+
+![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-26-5FA04E?logo=nodedotjs&logoColor=white)
+![Turborepo](https://img.shields.io/badge/Turborepo-pnpm_workspaces-EF4444?logo=turborepo&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-BullMQ-FF4438?logo=redis&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?logo=prisma&logoColor=white)
+![Claude](https://img.shields.io/badge/Claude-Opus_5.5-D97757?logo=anthropic&logoColor=white)
+
+</div>
+
+<p align="center">
+  <img src="docs/review-v2.png" alt="The revised invoice: the summary reads 2 changed since v1 and 3 carried over; the changed due date shows its v1 value and approval beside it, and the matching quote is highlighted in the document text." width="900">
+  <br>
+  <sub>The revised invoice: the two changed values are on top with their v1 value and review, the rest carried over, and the selected value's quote is marked in the text.</sub>
+</p>
+
+---
+
+## Contents
+
+- [Quick start](#quick-start)
+- [A two-minute tour](#a-two-minute-tour)
+- [Architecture](#architecture)
+- [Monorepo layout](#monorepo-layout)
+- [Data model](#data-model)
+- [How extraction runs](#how-extraction-runs)
+- [Decisions the brief left open](#decisions-the-brief-left-open)
+- [Tests](#tests)
+- [What I cut, and what is next](#what-i-cut-and-what-is-next)
+- [At 10,000 documents](#at-10000-documents)
+
+---
+
+## Quick start
 
 ```bash
 cp .env.example .env    # then set ANTHROPIC_API_KEY
 docker compose up
 ```
 
-The first build takes several minutes (it installs the npm packages inside Docker).
-Compose starts Postgres, Redis, MinIO, the api, the worker and the web app, runs the migrations, and seeds version 1 of the three fixture documents, which the worker extracts within a few seconds each.
-Without an API key everything still runs, and every extraction ends `failed` with a readable error and a Retry button.
-If you add the key afterwards, run `docker compose up -d worker` (a restart does not re-read `.env`) and click Retry.
-If port 5432 is taken on your machine, set `POSTGRES_PORT` in `.env`.
+That one command starts Postgres, Redis, MinIO, the api, the worker and the web app.
+It runs the migrations and seeds version 1 of the three fixture documents, which the worker extracts within a few seconds each.
+The first build takes several minutes, because it installs the npm packages inside Docker.
 
-| What | Where |
+| Service | URL | Notes |
+|---|---|---|
+| **Review UI** | http://localhost:8080 | Start here. |
+| API | http://localhost:3000 | `GET /health` shows version and queue counts. |
+| MinIO console | http://localhost:9001 | `lomi` / `lomisecret` |
+
+> [!NOTE]
+> Without an API key everything still runs, and every extraction ends `failed` with a readable error and a Retry button.
+> If you add the key afterwards, run `docker compose up -d worker` (a restart does not re-read `.env`) and click **Retry**.
+
+> [!TIP]
+> If port 5432 is already taken on your machine, set `POSTGRES_PORT` in `.env`.
+
+---
+
+## A two-minute tour
+
+1. **Open "Invoice - Meridian Office Supplies".**
+   Each value sits beside its quote; selecting a value marks the quote in the document text.
+2. **Review every value:** approve four and correct one.
+   A correction needs a value; the note is optional.
+3. **Click "Upload new version"** and pick `fixtures/documents/invoice-001.v2.pdf`.
+   The page follows the extraction without a refresh, then reads **"2 changed since v1 · 3 carried over"**.
+   The due date and the total are pending, each with its v1 value and review beside it.
+4. **Switch the version picker to v1.**
+   The old version and its reviews are still there, read-only.
+5. **Open the market report** to see a gap: no value, and the model's reason why.
+
+---
+
+## Architecture
+
+<p align="center">
+  <img src="docs/architecture.png" alt="Architecture: the React web app calls the API server; the API writes PDFs to the S3 bucket, rows to Postgres and jobs to the Redis BullMQ queue; the worker takes jobs from Redis, calls the Anthropic LLM and writes to Postgres, the source of truth." width="900">
+</p>
+
+| Flow | What travels on it |
 |---|---|
-| Review UI | http://localhost:8080 |
-| API | http://localhost:3000 (`GET /health` shows version and queue counts) |
-| MinIO console | http://localhost:9001 (`lomi` / `lomisecret`) |
+| Web app → API | Every call goes through nginx at `/api`, so the browser needs no CORS and no API host. |
+| API → S3 bucket | The PDF bytes, stored as `pdfs/<sha256>.pdf` (MinIO locally). |
+| API → Postgres | The document and version rows, and every review. |
+| API → Redis | One job per version to extract, `{versionId}`. |
+| Worker ↔ Redis | The worker takes jobs, and its reconciler puts back any job Redis lost. |
+| Worker → S3 bucket | The worker reads the PDF it is extracting. |
+| Worker → Anthropic | One structured-output call per extraction. |
+| Worker → Postgres | Status, leases, runs, values and carried-over reviews. |
 
-What to click first:
+---
 
-1. Open **Invoice - Meridian Office Supplies**. Each value sits beside its quote, and selecting a value marks the quote in the document text.
-2. Review every value: approve four and correct one (a correction needs a value; the note is optional).
-3. Click **Upload new version** and pick `fixtures/documents/invoice-001.v2.pdf`.
-   The page follows the extraction without a refresh and then reads "2 changed since v1 · 3 carried over": the due date and the total are pending with their v1 value and review beside them, and everything else is carried over.
-4. Switch the version picker to v1: the old version and its reviews are still there, read-only.
-5. **Market report** shows a gap: no value, with the model's reason.
+## Monorepo layout
 
-Tests and checks run through turbo:
+pnpm workspaces with a Turborepo pipeline.
+
+```text
+apps/
+  api/        Express API: uploads, reads, reviews, retry, health; also the fixture seed
+  worker/     BullMQ worker: claim, parse, call the model, validate, carry over, commit; also the reconciler
+  web/        Vite + React review UI (TanStack Query, shadcn/ui), served by nginx
+packages/
+  core/       Pure extraction logic: PDF text, prompt, model client, evidence validation, carry-over
+  db/         Prisma schema, migrations and client
+  shared/     Zod schemas of the API's responses and of the review input
+spec/         One spec per feature, written before the code; HANDOFF.md has the gotchas
+fixtures/     The sample PDFs, the manifest and the expected fields
+```
+
+**Why this split**
+
+- **The api and the worker deploy and scale separately.**
+  Uploads must stay instant, while extraction is slow and bound by the model's rate limits.
+- **Correctness lives in `packages/core` as plain functions.**
+  "Is this quote really in the text?" and "did this field change?" are unit-tested without Postgres, Redis or a model.
+- **The API contract is written once, in `packages/shared`.**
+  The UI validates every response against it instead of trusting a type cast.
+- **The pipeline does real work.**
+  `generate` (the Prisma client) runs before `build`, `typecheck` and `test`; each package builds after its dependencies; `migrate-test` prepares the test database before the integration tests; `lint` runs oxlint everywhere.
+  A second `pnpm build` is fully cached.
+
+---
+
+## Data model
+
+```mermaid
+erDiagram
+    documents ||--o{ document_versions : "has"
+    document_versions ||--o{ extraction_runs : "one per attempt"
+    document_versions ||--o{ extracted_values : "one per field"
+    extracted_values ||--o{ reviews : "append-only"
+    extracted_values |o--o{ extracted_values : "previous_value_id"
+    reviews |o--o{ reviews : "carried_from_review_id"
+
+    documents {
+        text id PK
+        enum type "invoice, lease, market_report"
+        text title
+        uuid current_version_id FK "the version under review"
+    }
+    document_versions {
+        uuid id PK
+        int version_no "1, 2, 3 per document"
+        text storage_key "pdfs/sha256.pdf in MinIO"
+        text parsed_text "what evidence is checked against"
+        enum status "queued, extracting, extracted, failed, superseded"
+        int attempts
+        timestamptz lease_until
+        text error
+    }
+    extraction_runs {
+        uuid id PK
+        int attempt
+        text prompt
+        text raw_response
+        enum outcome "succeeded, failed, superseded"
+        int tokens_in
+        int tokens_out
+    }
+    extracted_values {
+        uuid id PK
+        text field_key "unique per version"
+        text value "model output, never changed"
+        text evidence "exact slice of parsed_text"
+        text gap_reason "set when value is null"
+        enum review_status "pending, approved, corrected, carried_over"
+        uuid previous_value_id FK "same field, earlier version"
+    }
+    reviews {
+        uuid id PK
+        enum action "approve or correct"
+        text corrected_value
+        text note
+        uuid carried_from_review_id FK "the review it was copied from"
+    }
+```
+
+| Table | One row per | Worth knowing |
+|---|---|---|
+| `documents` | thing a client sends revisions of | Points at its current version. |
+| `document_versions` | uploaded PDF | Holds the parsed text and the extraction state. |
+| `extraction_runs` | attempt | Prompt, raw model response, outcome, error, tokens. |
+| `extracted_values` | field of a version | A gap has `value` null and a `gap_reason`; `review_status` caches the latest review, so lists need no join. |
+| `reviews` | review action | Append-only; a carried-over review is a new row that points at the original. |
+
+**Why it is shaped this way**
+
+- **A new version never touches the old one.**
+  Values belong to a version, so v1, its values and its reviews stay exactly as they were.
+- **Lineage is explicit.**
+  "What was this field in v1, and who approved it?" is a join on `previous_value_id` and `carried_from_review_id`, not a guess.
+- **Duplicates are impossible, not just unlikely.**
+  `extracted_values` is unique on `(version_id, field_key)`.
+- **Each version keeps its own text.**
+  Evidence validation and the review UI for version N always use version N's text, also after N+1 exists.
+
+---
+
+## How extraction runs
+
+### Redis delivers work; Postgres remembers everything
+
+| Redis (BullMQ) | Postgres |
+|---|---|
+| One job per version, `{versionId}`, with `jobId = versionId` | Version status, lease, attempts and error |
+| Removed as soon as the job finishes | Every run: prompt, raw response, outcome, tokens |
+| Nothing in it is needed to rebuild the state | Every value and every review |
+
+Losing Redis loses no data: the worker's **reconciler** runs every 15 s and enqueues every version Postgres says needs work (`queued`, or `extracting` with an expired lease).
+
+### The life of a version
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> queued: upload, 202
+    queued --> extracting: claimed, 60 s lease
+    extracting --> extracted: values committed
+    extracting --> failed: parse or model error
+    extracting --> superseded: a newer version is current
+    failed --> queued: Retry
+    note right of extracting
+        If the worker dies, the lease expires and the version is claimed again. After 3 unfinished attempts it fails.
+    end note
+```
+
+### Step by step
+
+1. **Upload.** The PDF goes to MinIO first, then the `queued` version row, then the job; the api answers `202` in about 20-140 ms.
+   If the enqueue fails, the upload still succeeds and the reconciler enqueues it.
+2. **Claim.** One conditional `UPDATE` moves the version to `extracting` with a 60 s lease, only if it is `queued` or its lease expired, and it has attempts left (3).
+   However many jobs exist for a version, only one claim succeeds.
+3. **Heartbeat.** A running attempt renews its lease every 20 s.
+4. **Parse, then call the model.** The parsed text, the prompt and then the raw response are saved before anything can fail on them.
+5. **Validate, carry over, commit.** The evidence is checked first; the carried-over reviews and the values are then committed in one transaction under the document's row lock, with `ON CONFLICT DO NOTHING`.
+6. **Fail as a state.** A parse or model error sets the version `failed` with a readable error, such as `llm_request_failed: 401 authentication_error: invalid x-api-key`, and the reviewer retries it from the UI.
+
+### When things fail
+
+Each of these was run against the compose stack.
+
+| Failure | What happens | Observed |
+|---|---|---|
+| **Worker killed** mid-extraction | The lease stops being renewed and expires; the reconciler re-enqueues; attempt 2 claims it. | Extracted 94 s after `docker compose kill worker`: 60 s lease, up to 15 s to reconcile, then a 25 s model call. |
+| **`docker compose restart`** | The worker gets SIGTERM and finishes its running job; a job that outlives Docker's 10 s grace is killed and resumes as above. The seed re-runs and adds nothing. | Finished during shutdown. With `restart -t 0` (immediate kill), extracted 67 s later. |
+| **`redis-cli FLUSHALL`** + restart | A job in flight keeps running and commits to Postgres; queued jobs come back through the reconciler. | 1 extracting and 3 queued versions, flushed and hard-restarted: all 4 extracted within 66 s, every value and review intact. |
+| **Redis down** | Uploads still succeed and stay `queued`; `/health` answers 503; jobs flow again when Redis is back. | Upload answered `202` in 0.12 s; extracted 13 s after Redis came back. |
+| **Postgres down** | The api answers 500 (`/health` 503); the worker cannot claim or commit, so nothing is half-written; leases expire and the reconciler resumes. | Down for 15 s mid-extraction: resumed on attempt 2, extracted 49 s after Postgres came back. |
+| **Duplicate jobs, double Retry** | `jobId` dedupes waiting jobs, the claim lets one through, the unique key catches the rest; Retry is one guarded `UPDATE`. | 4 extra jobs for one version: 1 run, 5 values. Two concurrent retries: one `202`, one `409`. |
+| **A PDF that crashes the worker** | Only attempts that never finish count; after 3 the version is `failed` with `too_many_attempts`. | Integration test. |
+
+> [!IMPORTANT]
+> No version stays `extracting` forever.
+> Either a live worker renews its lease, or the lease expires and the version is claimed again, until the attempt cap fails it visibly.
+> A killed attempt's run keeps `outcome` null: it never finished, and nothing rewrites history.
+
+---
+
+## Decisions the brief left open
+
+| Decision | Choice |
+|---|---|
+| [Correction model](#corrections-live-beside-the-value) | A correction lives **beside** the model's value, never over it. |
+| [New version while one is extracting](#a-newer-version-supersedes-one-still-extracting) | **Supersede**: the newest upload wins. |
+| [Polling, streaming or refresh](#poll-only-while-something-is-in-flight) | **Poll** every 2 s, only while something on screen is in flight. |
+| [What "unchanged" means](#what-unchanged-means) | Same value, and the old quote is **still in the new text**. |
+| [Where PDFs live](#pdfs-in-minio-parsed-text-in-postgres) | Bytes in **MinIO**, parsed text in **Postgres**. |
+| [Hallucination defense](#evidence-validation) | A quote not found in the text becomes a **gap**. |
+
+### Corrections live beside the value
+
+- `extracted_values.value` is always what the model said, and its evidence belongs to it.
+- A correction is a `reviews` row with `corrected_value` and an optional note; the effective value is the latest correction, or the model's value.
+- The API takes `{"action": "approve"}` or `{"action": "correct", "correctedValue": "...", "note": "..."}`; the UI shows the model's value struck through next to the correction.
+
+**Why:** the quote still matches the value it is shown with, the review history stays intact, and carry-over can compare the model's reading of v1 with its reading of v2.
+
+### A newer version supersedes one still extracting
+
+- An upload becomes the current version at once.
+- When the worker reaches the older version's currency check (before the model call, and again at commit under the document lock), it marks it `superseded` and writes no values.
+- A previous version that already finished stays `extracted` and is the base for carry-over.
+- Uploading bytes identical to the current version is refused with `409`.
+
+**Why:** the reviewer wants the newest file reviewed.
+Rejecting would make them wait for an extraction nobody will review, and queueing both would spend a model call on it.
+
+### Poll only while something is in flight
+
+- The UI polls every 2 s while something on screen is `queued` or `extracting`, and stops on its own; the network tab goes quiet once nothing is in flight.
+- Queries also refetch when the window regains focus, which is when a document uploaded by someone else shows up.
+
+**Why:** an extraction takes seconds and passes through three states, and a reviewer works on one document at a time, so polling needs no extra infrastructure.
+With many reviewers or long-running work I would push changes instead, with server-sent events from Postgres `LISTEN/NOTIFY`.
+
+### What "unchanged" means
+
+For each field, the new value is compared with the same field in the latest earlier extracted version.
+It is **unchanged** when both hold:
+
+1. the model's value is the same, ignoring whitespace, and
+2. its evidence is the same quote, or the **old quote still appears in the new version's text**.
+
+A gap that is still a gap is unchanged too.
+An unchanged value gets the previous review copied forward and is `carried_over`; anything else is `pending`, with the previous value and review shown beside it.
+
+**Why "the old quote is still there":** it holds when the text around it shifts, wraps or gains lines, and when the model quotes a slightly different span of the same passage, while any edit inside the quoted passage breaks it.
+
+What the fixture's revised invoice produces:
+
+| Field | v1 | v2 | Result |
+|---|---|---|---|
+| Invoice number | INV-2025-0847 | INV-2025-0847 | Carried over |
+| Issue date | 2025-09-14 | 2025-09-14 | Carried over |
+| Due date | 2025-10-14 | **2025-11-13** | **Pending**, shown with v1's value and review |
+| Vendor name | MERIDIAN OFFICE SUPPLIES LLC | MERIDIAN OFFICE SUPPLIES LLC | Carried over |
+| Total amount | $5,230.29 | **$6,126.45** | **Pending**, shown with v1's value and review |
+
+### PDFs in MinIO, parsed text in Postgres
+
+- The bytes go to S3-compatible storage as `pdfs/<sha256>.pdf`, written before the database row, so a row never points at a missing object.
+- Postgres keeps the key, the hash and the parsed text.
+
+**Why:** the database stays small, and the same code runs against S3 or GCS in production.
+The parsed text is stored per version rather than re-parsed, so the evidence offsets and the highlighting always point into exactly the text that was validated.
+
+### Evidence validation
+
+- Each quote must appear in the version's parsed text, ignoring only whitespace differences, since PDF text extraction and the model rarely agree on line breaks.
+- The stored evidence is then the exact slice of the parsed text, with its offsets.
+- A quote that is not there becomes a gap with reason `evidence_not_found`; a field the model skipped becomes `missing_from_llm_output`; a field the model could not find keeps the model's reason.
+- `packages/core/src/evidence.test.ts` proves a hallucinated quote becomes a gap.
+
+The model is `claude-opus-5-5` with structured output against a zod schema, effort `medium`, and server-side refusal fallback.
+An extraction uses about 1,100 input and 260 output tokens, roughly one cent.
+
+---
+
+## Tests
+
+**104 tests**, placed where breakage would be silent or expensive.
+
+| Package | Runs against | Covers |
+|---|---|---|
+| `packages/core` | Nothing (pure functions) | Evidence validation including a hallucinated quote, carry-over rules, model output parsing, model error messages, PDF text |
+| `apps/worker` | Real Postgres and Redis | Racing claims, a worker killed mid-extraction, a Redis flush, the attempt cap, retry |
+| `apps/api` | Real Postgres and Redis | Uploads and their failure modes, reviews and the stale-version `409`, carry-over end to end through the worker, retry, the seed |
+| `apps/web` | MSW | Polling starts and stops, approve and correct, the stale-version message, what counts as changed, the list order |
 
 ```bash
 pnpm install
 pnpm build    # a second run is fully cached
-TEST_DATABASE_URL=postgres://lomi:lomi@127.0.0.1:5432/lomi_test TEST_REDIS_URL=redis://127.0.0.1:6379/1 pnpm turbo run typecheck lint test
+TEST_DATABASE_URL=postgres://lomi:lomi@127.0.0.1:5432/lomi_test \
+TEST_REDIS_URL=redis://127.0.0.1:6379/1 \
+pnpm turbo run typecheck lint test
 ./scripts/chaos.sh    # kills the worker and flushes Redis mid-extraction against the running stack
 ```
 
 The integration tests need the compose Postgres and Redis; without the two variables they are skipped.
 They use their own database and Redis database, because the compose worker would otherwise pick up their rows.
 
-## Monorepo layout
-
-pnpm workspaces and Turborepo.
-
-| Package | What it holds |
-|---|---|
-| `apps/api` | Express API: uploads, reads, reviews, retry, health. Also the fixture seed. |
-| `apps/worker` | BullMQ worker: claims a version, parses the PDF, calls the model, validates evidence, carries reviews over, commits. Also the reconciler. |
-| `apps/web` | Vite + React review UI (TanStack Query, shadcn/ui), served by nginx, which proxies `/api` to the api. |
-| `packages/core` | Pure extraction logic: PDF text, prompt, model client, output parsing, evidence validation, carry-over. No database or queue. |
-| `packages/db` | Prisma schema, migrations and the client. |
-| `packages/shared` | Zod schemas of the API's responses and of the review input, used by the api and parsed by the web app at runtime. |
-| `spec/` | One spec per feature, written before the code; `spec/HANDOFF.md` has the gotchas. |
-
-Why this split:
-
-- The api and the worker deploy and scale separately: uploads must stay instant, while extraction is slow and limited by the model's rate limits.
-- Everything that decides correctness (is this quote really in the text, did this field change) lives in `packages/core` as plain functions, so it is unit-tested without Postgres, Redis or a model.
-- The API contract is written once in `packages/shared`; the UI validates every response against it instead of trusting a type cast.
-- The pipeline is real: `generate` (Prisma client) runs before `build`, `typecheck` and `test`; each package builds after its dependencies; `migrate-test` migrates the test database before the integration tests; `lint` runs oxlint everywhere.
-
-## Schema
-
-```
-documents 1──* document_versions 1──* extraction_runs
-                                 1──* extracted_values 1──* reviews
-
-documents.current_version_id         → the version under review
-extracted_values.previous_value_id   → the same field in the version it was compared with
-reviews.carried_from_review_id       → the review a carried-over review was copied from
-```
-
-- **documents**: the thing a client sends revisions of, with a pointer to its current version.
-- **document_versions**: one row per uploaded PDF, numbered 1, 2, 3 per document.
-  It holds the object's key and sha256, the parsed text, and the extraction state: `status` (`queued`, `extracting`, `extracted`, `failed`, `superseded`), `attempts`, `lease_until`, `error`.
-- **extraction_runs**: one row per attempt, with the prompt, the raw model response, the outcome, the error and the token counts.
-- **extracted_values**: one row per field per version, unique on `(version_id, field_key)`.
-  `value` is the model's output and is never changed; `evidence` is the exact slice of that version's `parsed_text`, with its offsets; a gap has `value` null and a `gap_reason`.
-  `previous_value_id` links the value to the same field in the version it was compared with.
-  `review_status` (`pending`, `approved`, `corrected`, `carried_over`) is a cache of the latest review, so lists and counts need no join.
-- **reviews**: append-only, `approve` or `correct` (with `corrected_value`) plus an optional note.
-  A carried-over review is a new row on the new value, pointing at the review it came from.
-
-Why it is shaped this way:
-
-- Values belong to a version, so a new version never touches the old one: v1, its values and its reviews stay as they were and stay queryable.
-- Lineage is explicit (`previous_value_id`, `carried_from_review_id`), so "what was this field in v1, and who approved it" is a join, not a guess.
-- The unique key on `(version_id, field_key)` makes a duplicate extraction impossible, not just unlikely.
-- Each version keeps its own parsed text, so evidence validation and the review UI for version N always work against version N's text, also after N+1 exists.
-
-## Extraction: what lives in Redis and what lives in Postgres
-
-Postgres is the source of truth for everything a user can see: versions and their status, attempts, errors, runs, values and reviews.
-Redis (BullMQ) only delivers work: a job `{versionId}` with `jobId = versionId`, removed from Redis once it finishes.
-Nothing in Redis is needed to rebuild the state, so losing Redis loses no data.
-
-How one version is extracted:
-
-1. **Upload.** The PDF is written to MinIO first, then the version row (`queued`) in a transaction, then the job is enqueued, and the api answers `202` (about 20-140 ms in my runs).
-   If the enqueue fails, the upload still succeeds: the row is `queued` and the reconciler enqueues it.
-2. **Claim.** One conditional `UPDATE` moves the version to `extracting` with a 60 s lease, only if it is `queued` or its lease has expired, and it has attempts left (3).
-   Of any number of jobs for one version, only one claim succeeds; the others end as `not_claimable`.
-3. **Heartbeat.** While the attempt runs, the lease is renewed every 20 s.
-4. **Parse, then call the model.** The parsed text is saved first; the prompt and then the raw response are saved on the run before anything can fail on them.
-5. **Validate the evidence**, then carry reviews over and **commit** in one transaction under the document's row lock, with `ON CONFLICT DO NOTHING` on the values.
-6. **Fail as a state.** A parse or model error sets the version `failed` with a readable error (for example `llm_request_failed: 401 authentication_error: invalid x-api-key`); the user retries it from the UI.
-
-The **reconciler** in the worker runs every 15 s and enqueues every version Postgres says needs work: `queued`, or `extracting` with an expired lease.
-That one loop is what makes Redis disposable.
-
-What happens when something fails (each of these was run against the compose stack):
-
-| Failure | What happens | Observed |
-|---|---|---|
-| Worker killed mid-extraction | The lease stops moving and expires; the reconciler re-enqueues; the next claim is attempt 2. | Extracted 94 s after `docker compose kill worker` (60 s lease, up to 15 s reconcile, then a 25 s model call). |
-| `docker compose restart` | The worker gets SIGTERM and lets its running job finish; one that outlives Docker's 10 s grace is killed and resumes as above. The seed re-runs and adds nothing. | Finished during shutdown; with `restart -t 0` (immediate kill) extracted 67 s later. |
-| `redis-cli FLUSHALL` + restart | A job in flight keeps running and commits to Postgres; queued jobs are gone from Redis and come back through the reconciler. | 1 extracting + 3 queued versions, flushed and hard-restarted: all 4 extracted within 66 s; every earlier value and review intact. |
-| Redis down | Uploads still succeed (the producer fails fast, the row stays `queued`); `/health` answers 503; jobs flow again when Redis is back. | Upload answered `202` in 0.12 s with Redis stopped, and was extracted 13 s after Redis came back. |
-| Postgres down | The api answers 500 (`/health` 503); the worker cannot claim or commit, so nothing is half-written; leases expire and the reconciler resumes the versions when Postgres is back. | Stopped mid-extraction for 15 s: the version resumed on attempt 2 and was extracted 49 s after Postgres came back. |
-| The same version enqueued twice, Retry clicked twice | `jobId` dedupes waiting jobs; the claim lets one through; the unique key catches the rest; Retry is one guarded `UPDATE` (the second click gets `409`). | 4 extra jobs for one version: 1 run, 5 values. Two concurrent retries: one `202`, one `409`. |
-| A PDF that crashes the worker every time | Only attempts that never finish count towards the cap; after 3 the version is `failed` with `too_many_attempts`. | Integration test. |
-
-No version stays `extracting` forever: either a live worker renews its lease, or the lease expires and the version is claimed again, until the attempt cap fails it visibly.
-A killed attempt's run row keeps `outcome` null, since it never finished and nothing rewrites history.
-
-## Decisions the brief left open
-
-**Correction model: a correction lives beside the value.**
-`extracted_values.value` is always what the model said, and the evidence belongs to it; a correction is a `reviews` row with `corrected_value` and an optional note.
-The effective value is the latest correction, or the model's value.
-The API takes `{"action": "approve"}` or `{"action": "correct", "correctedValue": "...", "note": "..."}`, and the UI shows the model's value struck through next to the correction.
-This keeps provenance (the quote still matches the value it is shown with), keeps the review history, and lets carry-over compare the model's reading of v1 with its reading of v2.
-
-**A new version while the previous one is still extracting: supersede.**
-The upload always becomes current at once.
-When the worker reaches the older version's currency check (before the model call, and again at commit under the document lock), it marks it `superseded` and writes no values.
-A previous version that already finished stays `extracted` and is the base for carry-over.
-The reviewer wants the newest file reviewed; rejecting would make them wait for an extraction nobody will review, and queueing both would spend a model call on it.
-Uploading bytes identical to the current version is refused with `409`.
-
-**Polling, every 2 s, only while something on screen is queued or extracting.**
-An extraction takes seconds and passes through three states, and a reviewer works on one document at a time; polling needs no extra infrastructure and stops on its own (the network tab goes quiet once nothing is in flight).
-Queries also refetch when the window regains focus, which is when a document uploaded by someone else shows up on the list.
-With many reviewers or long-running work I would push changes instead (server-sent events from Postgres `LISTEN/NOTIFY`).
-
-**What "unchanged" means.**
-For each field, the new value is compared with the same field in the latest earlier extracted version.
-It is unchanged when the model's value is the same (whitespace-normalised) and its evidence is either the same quote or the old quote still appears in the new version's text.
-A field that was a gap and is still a gap is unchanged too.
-Checking that the old quote is still present, instead of comparing offsets or whole pages, holds when the text around it shifts, wraps or gains lines, and when the model quotes a slightly different span of the same passage.
-An unchanged value gets the old latest review copied forward and is `carried_over`; anything else is `pending` and shows the previous value and its review.
-With the fixture's v2 exactly the two edited fields (due date and total) come back as pending.
-
-**PDFs in MinIO, parsed text in Postgres.**
-The bytes go to S3-compatible storage under `pdfs/<sha256>.pdf`, written before the database row so a row never points at a missing object; Postgres keeps the key, the hash and the parsed text.
-That keeps the database small and is the same code against S3 or GCS in production.
-The parsed text is stored per version rather than re-parsed, so the evidence offsets and the highlighting always point into the exact text that was validated.
-
-**Evidence validation, the hallucination defense.**
-Each quote must appear in the version's parsed text, ignoring whitespace differences only (PDF text extraction and the model rarely agree on line breaks); the stored evidence is then the exact slice of the parsed text.
-A quote that is not there becomes a gap with reason `evidence_not_found`, a field the model did not return becomes `missing_from_llm_output`, and a field the model could not find keeps its own reason.
-`packages/core/src/evidence.test.ts` covers the hallucinated quote.
-
-**The model.** `claude-opus-5-5` with structured output against a zod schema, effort `medium`, and server-side refusal fallback.
-An extraction uses about 1,100 input and 260 output tokens, roughly one cent.
-
-## Tests
-
-Tests sit where breakage would be silent or expensive: 104 tests across the packages.
-
-- `packages/core`: evidence validation (including a hallucinated quote), carry-over rules, model output parsing, model error messages, PDF text.
-- `apps/worker` against real Postgres and Redis: racing claims, a worker killed mid-extraction, a Redis flush, the attempt cap, retry.
-- `apps/api` against real Postgres and Redis: uploads and their failure modes, reviews and the stale-version `409`, carry-over end to end through the worker, retry, the seed.
-- `apps/web` with MSW: polling starts and stops, approve and correct, the stale-version message, what counts as changed, the list order.
+---
 
 ## What I cut, and what is next
 
-Cut, on purpose:
+| Cut on purpose | What it means today |
+|---|---|
+| Authentication and reviewer identity | Reviews have no author. |
+| Pagination of the document list | The list returns every document. |
+| OCR | A scanned PDF without a text layer fails with `no_text_layer`. |
+| Normalising dates and amounts before comparing versions | `$5,230.29` and `5230.29` count as a change. |
+| Cleanup of orphaned objects | A failed upload transaction can leave its PDF in MinIO. |
+| Backoff between crash attempts, metrics beyond `/health` | Crashes retry at once; health is the only signal. |
+| CI and a deployment | Everything is verified locally. |
 
-- Authentication and reviewer identity: reviews have no author yet.
-- Pagination of the document list.
-- OCR: a scanned PDF without a text layer fails with `no_text_layer`.
-- Normalising dates and amounts before comparing versions (`$5,230.29` and `5230.29` count as a change).
-- Cleanup of objects orphaned by a failed upload transaction.
-- Backoff between crash attempts, and metrics beyond `/health`.
-- CI and a deployment: everything is verified locally.
+**Next, in order:**
 
-Next, in order: reviewer identity on reviews, CI running the turbo pipeline against service containers, a deployment (Cloud Run or ECS, managed Postgres and Redis, S3 or GCS), then the scale work below.
+1. Reviewer identity on reviews.
+2. CI running the turbo pipeline against service containers.
+3. A deployment: Cloud Run or ECS, managed Postgres and Redis, S3 or GCS.
+4. The scale work below.
+
+---
 
 ## At 10,000 documents
 
-- **List**: paginate with a cursor on `(created_at, id)` and filter by status; keep pending and total counts on the version, updated at commit and review, instead of aggregating values on every request.
-- **Throughput**: run more workers (the claim is safe across them) and rate-limit them to the model's limits with BullMQ's limiter and backoff on 429; use the Batches API for bulk backfills, which is half the price and needs no latency.
-- **Cost**: about $100 per 10,000 extractions at today's token counts; log cost per run and alert on outliers.
-- **Updates**: polling a paginated list is still fine; with many reviewers move to server-sent events.
-- **Reconciler**: it already uses the `(status, lease_until)` index; enqueue in batches and let one worker run it (a Postgres advisory lock).
-- **Storage**: parsed text stays in Postgres (a few KB each); PDFs stay in object storage with a lifecycle policy for superseded versions.
-- **Review load**: a queue of pending values across documents (changed values first), so several reviewers can work through fields without opening every document.
+| Area | Change |
+|---|---|
+| **Document list** | Paginate with a cursor on `(created_at, id)` and filter by status; keep pending and total counts on the version, updated at commit and review, instead of aggregating on every request. |
+| **Throughput** | Run more workers (the claim is safe across them), rate-limited to the model's limits with BullMQ's limiter and backoff on 429; use the Batches API for bulk backfills, at half the price. |
+| **Cost** | About $100 per 10,000 extractions at today's token counts; log cost per run and alert on outliers. |
+| **Updates** | Polling a paginated list still works; with many reviewers, move to server-sent events. |
+| **Reconciler** | It already uses the `(status, lease_until)` index; enqueue in batches and let one worker run it under a Postgres advisory lock. |
+| **Storage** | Parsed text stays in Postgres (a few KB each); PDFs stay in object storage, with a lifecycle policy for superseded versions. |
+| **Review load** | A queue of pending values across documents, changed values first, so several reviewers can work through fields without opening every document. |
