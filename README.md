@@ -332,25 +332,9 @@ The review UI is on Vercel.
 | **Review UI** | https://lomi-review-pi.vercel.app |
 | API | https://api-pqoxlls5ja-el.a.run.app (`GET /health` shows version and queue counts) |
 
-```mermaid
-flowchart LR
-  browser([Browser]) -->|HTTPS| vercel[Vercel<br>review UI]
-  browser -->|HTTPS, CORS| api[Cloud Run<br>api]
-  worker[Cloud Run worker pool<br>worker]
-  subgraph vpc[VPC, private services access, no NAT]
-    sql[(Cloud SQL<br>Postgres 18)]
-    redis[(Memorystore<br>Redis 7.2)]
-  end
-  api -->|Direct VPC egress| sql
-  api --> redis
-  worker --> sql
-  worker --> redis
-  api -->|JSON API, service account| gcs[(Cloud Storage<br>PDFs)]
-  worker --> gcs
-  worker -->|HTTPS| anthropic[Anthropic API]
-  secrets[Secret Manager] -.->|secret env vars| api
-  secrets -.-> worker
-```
+<p align="center">
+  <img src="docs/cloud_infra.png" alt="Cloud infrastructure: the browser loads the review UI from Vercel and calls the api on Cloud Run. Inside Google Cloud project lomi-review-1128 (asia-south1), Cloud Run runs the api service, the worker pool and the migrate-and-seed job. The api and worker reach Cloud SQL Postgres 18 and Memorystore Redis 7.2 in a VPC with private IPs only; the migrate job and the apps keep PDFs in Cloud Storage without keys, and secrets come from Secret Manager. The worker calls the Anthropic API. Cloud Build pushes the images to Artifact Registry." width="900">
+</p>
 
 | Piece | Google Cloud service |
 |---|---|

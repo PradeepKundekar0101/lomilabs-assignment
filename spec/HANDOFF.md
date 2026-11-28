@@ -48,7 +48,8 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the o
 - PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/7 (spec 008 revisions 1 and 2, the root `README.md` and the submission-check fixes) was merged into `main` on 2026-11-28 as `81db5a9`.
 - The `review-ui` branch is fully merged; do not add to it.
 - PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/10 (tests folder) and PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/11 (spec 009) were merged into `main` on 2026-11-28 (`0ce591d`).
-- PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/12 (spec 010, branch `cloud-deploy` off `0ce591d`) was opened on 2026-11-28 and is not merged yet.
+- PR https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/12 (spec 010) was merged into `main` on 2026-11-28 as `7459f8f`.
+- The `cloud-deploy` branch is fully merged except the README's drawn cloud diagram, which went in through `docs-pr12-merged`; do not add to it.
 - New work: branch off `main` and open a PR.
 - Commits must be authored as `pradeepkundekar0101 <91021094+PradeepKundekar0101@users.noreply.github.com>`. The repo-local git config sets this; the machine's global identity is a different account.
 - The repo has no CI. Verification is local only.
@@ -66,7 +67,7 @@ The legacy scaffolding (`JobStore`, `enqueue`, `processNext`, `createJob`, the o
 | 007 Extraction resilience (lease heartbeat, reconciler, attempt cap, retry, health counts) | Done and verified (integration tests, `scripts/chaos.sh`, retry and Redis-down checks in docker), merged (PR #4). |
 | 008 Review UI | Revision 2 (the Lomi Labs design system) done and verified (component tests with MSW, api integration, E2E in docker through nginx), merged (PR #7). The 2026-11-28 submission check added fixes (list order, stale toast, readable model errors, nginx cache headers) and the root `README.md`, also in PR #7. |
 | 009 API layers and validated boundaries | Done, merged (PR #11). Its images were rebuilt and run end to end with spec 010's compose check. |
-| 010 Cloud deployment | Revision 2 (Google Cloud) done and verified in the cloud and in compose, PR #12 (open). Live in project `lomi-review-1128` (`asia-south1`): api `https://api-pqoxlls5ja-el.a.run.app`, UI `https://lomi-review-pi.vercel.app`. Revision 1 (AWS) was destroyed. It costs about $3 to $4 a day until `terraform destroy`. |
+| 010 Cloud deployment | Revision 2 (Google Cloud) done and verified in the cloud and in compose, merged (PR #12). Live in project `lomi-review-1128` (`asia-south1`): api `https://api-pqoxlls5ja-el.a.run.app`, UI `https://lomi-review-pi.vercel.app`. Revision 1 (AWS) was destroyed. It costs about $3 to $4 a day until `terraform destroy`. |
 
 Draft specs contain assumptions and open questions; confirm them with the user before implementing.
 
