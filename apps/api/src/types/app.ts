@@ -18,4 +18,6 @@ export interface AppDeps {
   fields: ExpectedFields;
   createVersion: (target: VersionTarget, file: File) => Promise<CreateVersionResult>;
   retry: (documentId: string) => Promise<RetryResult>;
+  /** The review UI's origin when it is not served same-origin; its requests get CORS headers. */
+  webOrigin?: string;
 }

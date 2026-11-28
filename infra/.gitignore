@@ -1,0 +1,6 @@
+# Local state holds the RDS password and the Anthropic key: never commit it.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan

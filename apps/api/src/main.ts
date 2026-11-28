@@ -18,6 +18,7 @@ const server = createApp({
   fields,
   createVersion: (target, file) => createVersion(versionDeps, target, file),
   retry: (documentId) => retryDocument({ db, enqueue: versionDeps.enqueue }, documentId),
+  webOrigin: env.WEB_ORIGIN,
 }).listen(env.PORT, () => console.log(`api listening on :${env.PORT}`));
 
 process.on("SIGTERM", () => {

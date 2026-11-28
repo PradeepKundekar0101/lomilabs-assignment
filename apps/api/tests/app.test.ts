@@ -49,6 +49,12 @@ async function request(path: string, init: RequestInit = {}, deps: Partial<AppDe
   }
 }
 
+describe("GET /health/live", () => {
+  it("returns 200 even while Postgres and Redis are down", async () => {
+    expect(await request("/health/live", {}, { checks: { db: fail, redis: fail } })).toEqual({ status: 200, body: { status: "ok" } });
+  });
+});
+
 describe("GET /health", () => {
   it("returns 200 with version and queue counts when db and redis are up", async () => {
     expect(await request("/health")).toEqual({ status: 200, body: { db: "ok", redis: "ok", versions, queue } });
@@ -256,5 +262,29 @@ describe("POST /documents/:id/retry", () => {
   it("returns 500 when the database fails", async () => {
     const r = await request(`/documents/${DOC_ID}/retry`, { method: "POST" }, { retry: fail as AppDeps["retry"] });
     expect(r).toEqual({ status: 500, body: { error: "internal error" } });
+  });
+});
+
+describe("CORS for the review UI on another origin", () => {
+  const WEB = "https://lomi.vercel.app";
+  async function headers(path: string, init: RequestInit, webOrigin?: string) {
+    const server = createApp({ ...baseDeps, webOrigin }).listen(0);
+    await once(server, "listening");
+    try {
+      const res = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}${path}`, init);
+      return { status: res.status, allow: res.headers.get("access-control-allow-origin"), methods: res.headers.get("access-control-allow-methods") };
+    } finally {
+      server.close();
+    }
+  }
+  const preflight = { method: "OPTIONS", headers: { origin: WEB, "access-control-request-method": "POST", "access-control-request-headers": "content-type" } };
+
+  it("allows WEB_ORIGIN's requests and answers its preflight", async () => {
+    expect(await headers("/documents", { headers: { origin: WEB } }, WEB)).toEqual({ status: 200, allow: WEB, methods: null });
+    expect(await headers("/values/x/review", preflight, WEB)).toEqual({ status: 204, allow: WEB, methods: "GET, POST" });
+  });
+  it("sends no CORS headers to another origin, or when WEB_ORIGIN is unset", async () => {
+    expect((await headers("/documents", { headers: { origin: "https://evil.example" } }, WEB)).allow).toBeNull();
+    expect((await headers("/values/x/review", preflight)).allow).toBeNull();
   });
 });
