@@ -1,6 +1,6 @@
 # 010 Cloud deployment
 
-Status: Done (2026-11-28, branch `aws-deploy`, not yet committed; deployed to project `lomi-review-1128`)
+Status: Done (2026-11-28, branch `cloud-deploy`, [PR #12](https://github.com/PradeepKundekar0101/lomilabs-assignment/pull/12); deployed to project `lomi-review-1128`)
 Depends on: 002, 003, 006, 007, 008, 009
 
 Revisions:
