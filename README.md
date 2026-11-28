@@ -135,57 +135,9 @@ fixtures/     The sample PDFs, the manifest and the expected fields
 
 ## Data model
 
-```mermaid
-erDiagram
-    documents ||--o{ document_versions : "has"
-    document_versions ||--o{ extraction_runs : "one per attempt"
-    document_versions ||--o{ extracted_values : "one per field"
-    extracted_values ||--o{ reviews : "append-only"
-    extracted_values |o--o{ extracted_values : "previous_value_id"
-    reviews |o--o{ reviews : "carried_from_review_id"
-
-    documents {
-        text id PK
-        enum type "invoice, lease, market_report"
-        text title
-        uuid current_version_id FK "the version under review"
-    }
-    document_versions {
-        uuid id PK
-        int version_no "1, 2, 3 per document"
-        text storage_key "pdfs/sha256.pdf in MinIO"
-        text parsed_text "what evidence is checked against"
-        enum status "queued, extracting, extracted, failed, superseded"
-        int attempts
-        timestamptz lease_until
-        text error
-    }
-    extraction_runs {
-        uuid id PK
-        int attempt
-        text prompt
-        text raw_response
-        enum outcome "succeeded, failed, superseded"
-        int tokens_in
-        int tokens_out
-    }
-    extracted_values {
-        uuid id PK
-        text field_key "unique per version"
-        text value "model output, never changed"
-        text evidence "exact slice of parsed_text"
-        text gap_reason "set when value is null"
-        enum review_status "pending, approved, corrected, carried_over"
-        uuid previous_value_id FK "same field, earlier version"
-    }
-    reviews {
-        uuid id PK
-        enum action "approve or correct"
-        text corrected_value
-        text note
-        uuid carried_from_review_id FK "the review it was copied from"
-    }
-```
+<p align="center">
+  <img src="docs/db.png" alt="Schema: documents has many document_versions; each version has one extraction_runs row per attempt and one extracted_values row per field; each value has append-only reviews. extracted_values.previous_value_id points at the same field in an earlier version, and reviews.carried_from_review_id points at the review a carried-over review was copied from." width="900">
+</p>
 
 | Table | One row per | Worth knowing |
 |---|---|---|
@@ -222,19 +174,9 @@ Losing Redis loses no data: the worker's **reconciler** runs every 15 s and enqu
 
 ### The life of a version
 
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> queued: upload, 202
-    queued --> extracting: claimed, 60 s lease
-    extracting --> extracted: values committed
-    extracting --> failed: parse or model error
-    extracting --> superseded: a newer version is current
-    failed --> queued: Retry
-    note right of extracting
-        If the worker dies, the lease expires and the version is claimed again. After 3 unfinished attempts it fails.
-    end note
-```
+<p align="center">
+  <img src="docs/The_life_of_a_version.png" alt="Version lifecycle: an upload (202) creates a queued version; it is claimed with a 60 s lease and becomes extracting; from there it ends extracted when values are committed, superseded when a newer version is current, or failed on a parse or model error, and Retry sends a failed version back to queued. If the worker dies, the lease expires and the version is claimed again; after 3 unfinished attempts it fails." width="900">
+</p>
 
 ### Step by step
 
